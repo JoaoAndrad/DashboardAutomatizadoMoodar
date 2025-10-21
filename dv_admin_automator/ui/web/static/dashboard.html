@@ -1,0 +1,454 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DV Admin Automator — Dashboard</title>
+    <style>
+      :root{ --bg1: linear-gradient(135deg,#ff9ad1 0%,#7bd1ff 100%); --card-bg: rgba(255,255,255,0.95); --accent-pink:#ff4fa3; --accent-blue:#2ea6ff; --muted:#6b6b7a }
+      html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
+      body{display:flex;align-items:flex-start;justify-content:center;background:var(--bg1);padding:1.5rem}
+      .app-wrap{width:100%;max-width:1200px}
+      .topbar{height:56px;background:transparent;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+      .topbar .ops{display:flex;align-items:center;gap:12px}
+      .topbar .operator{font-size:14px;color:#222}
+      .card{width:100%;background:var(--card-bg);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,0.10);overflow:hidden;display:grid;grid-template-columns:240px 1fr}
+      .nav{padding:18px;background:linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,255,255,0.95));}
+      .logo{width:40px;height:40px;border-radius:8px;background:linear-gradient(135deg,var(--accent-pink),var(--accent-blue));display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
+      .btn{appearance:none;border:0;padding:10px 12px;border-radius:8px;font-weight:600;color:white;cursor:pointer}
+      .btn.primary{background:linear-gradient(90deg,var(--accent-pink),var(--accent-blue))}
+      .section{padding:20px}
+      .muted{color:var(--muted);font-size:13px}
+      /* nav items */
+      .nav .menu{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+      .nav .menu button{background:transparent;border-radius:8px;padding:10px;text-align:left;color:#333;border:1px solid transparent}
+      .nav .menu button:hover{background:rgba(0,0,0,0.03)}
+      .nav .menu button.active{background:linear-gradient(90deg,var(--accent-pink),var(--accent-blue));color:white}
+      /* content cards */
+      .cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+      .card-item{background:white;border-radius:10px;padding:14px;box-shadow:0 6px 14px rgba(0,0,0,0.04);display:flex;flex-direction:column;gap:8px}
+      .card-item h3{margin:0;font-size:16px}
+      .card-item p{margin:0;color:var(--muted);font-size:13px}
+      @media(max-width:900px){
+        .card{grid-template-columns:1fr}
+        .cards{grid-template-columns:1fr}
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-wrap">
+      <div class="topbar">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="logo">DV</div>
+          <div style="font-weight:700">Automação Dashboard</div>
+        </div>
+        <div class="ops">
+          <div class="operator muted" id="operator_info">Operador</div>
+          <label style="display:flex;align-items:center;gap:8px;margin-right:12px;color:var(--muted);font-size:13px">
+            <input type="checkbox" id="keepalive_chk" style="transform:scale(1.1)" /> Manter sessão ativa
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+      <div class="nav">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="logo">DV</div>
+          <div style="font-weight:700">Automação Dashboard</div>
+        </div>
+        <div class="menu">
+          <button class="" data-screen="welcome">🏠 Início</button>
+          <button class="" data-screen="appointments">🗓️ Appointments</button>
+          <button class="" data-screen="participants">👥 Participantes</button>
+          <button class="" data-screen="export">📊 Exportação</button>
+          <button class="" data-screen="import">📥 Importação</button>
+          <button class="" data-screen="system">⚙️ Sistema</button>
+          <div style="margin-top:8px"></div>
+        </div>
+      </div>
+      <div class="main">
+        <!-- Content area where different screens will be rendered -->
+        <div id="content_area" class="section">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <h2 id="screen_title">Bem-vindo ao Dashboard</h2>
+            <div class="muted" id="screen_sub">Resumo rápido</div>
+          </div>
+
+          <div class="cards" id="cards_area" style="margin-top:12px">
+            <div class="card-item">
+              <h3>Execuções</h3>
+              <p>Inicie jobs e veja status.</p>
+              <div style="margin-top:8px"><button class="btn primary" onclick="startRun()">Iniciar Run</button></div>
+            </div>
+            <div class="card-item">
+              <h3>Exportação</h3>
+              <p>Exportar dados por empresa</p>
+              <div style="margin-top:8px"><button class="btn" onclick="appLog('Stub: export')">Exportar</button></div>
+            </div>
+            <div class="card-item">
+              <h3>Credenciais</h3>
+              <p>Gerenciar credenciais seguras</p>
+              <div style="margin-top:8px"><button class="btn" onclick="renderCredentialsManager()">Gerenciar</button></div>
+            </div>
+            <div class="card-item">
+              <h3>Participantes</h3>
+              <p>Operações em lote e perfis</p>
+              <div style="margin-top:8px"><button class="btn" onclick="renderParticipants()">Abrir</button></div>
+            </div>
+          </div>
+
+          <div id="login_banner" style="margin-top:12px;display:none;padding:10px;border-radius:8px;background:linear-gradient(90deg,rgba(255,255,255,0.95),rgba(255,255,255,0.9));">
+            <strong id="login_banner_text">Processando login...</strong>
+          </div>
+        </div>
+      </div>
+      </div>
+
+    <script>
+  // optional console area (may not be present in some views)
+  function log(m){ const outEl = document.getElementById('output'); if(!outEl) return; outEl.textContent += new Date().toLocaleTimeString() + ' ' + m + '\n'; outEl.scrollTop = outEl.scrollHeight; }
+      // Minimal shared logger for sections
+      function appLog(m){
+        // ensure output exists
+        const outEl = document.getElementById('output');
+        if(outEl){ outEl.textContent += new Date().toLocaleTimeString() + ' ' + m + '\n'; outEl.scrollTop = outEl.scrollHeight; }
+      }
+
+      // SPA navigation (inline rendering)
+      const contentArea = document.getElementById('content_area');
+      const screenTitle = document.getElementById('screen_title');
+      function renderScreen(name){
+        // basic dispatcher: update title and call renderer
+        screenTitle.textContent = {
+          welcome: 'Início', appointments: 'Appointments', participants: 'Participantes', export: 'Exportação', import: 'Importação', system: 'Sistema'
+        }[name] || 'Dashboard';
+        // set active menu
+        document.querySelectorAll('.nav .menu button').forEach(btn=> btn.classList.remove('active'));
+        const activeBtn = document.querySelector('.nav .menu button[data-screen="'+name+'"]');
+        if(activeBtn) activeBtn.classList.add('active');
+    // render all sections inline; only open dedicated pages for sub-options
+    if(name === 'welcome') return renderWelcome();
+    if(name === 'appointments') return renderAppointments();
+    if(name === 'participants') return renderParticipants();
+    if(name === 'export') return renderExport();
+    if(name === 'import') return renderImport();
+    if(name === 'system') return renderSystem();
+        // default
+        contentArea.querySelector('#cards_area').style.display = 'grid';
+      }
+
+      // Attach menu buttons with session guard: only allow non-welcome screens if /api/keepalive indicates authenticated
+      document.querySelectorAll('.nav .menu button').forEach(b => {
+        b.addEventListener('click', async (ev) => {
+          const target = b.dataset.screen;
+          if (target && target !== 'welcome') {
+            try {
+              const r = await fetch('/api/keepalive', { method: 'GET', credentials: 'same-origin', cache: 'no-store' });
+              if (!r.ok) {
+                // redirect to welcome automatically
+                renderScreen('welcome');
+                alert('Área restrita: faça login antes de acessar.');
+                return;
+              }
+            } catch (e) {
+              renderScreen('welcome');
+              alert('Erro de verificação de sessão: faça login antes de acessar.');
+              return;
+            }
+          }
+          renderScreen(b.dataset.screen);
+        });
+      });
+
+      // Intercept top-level anchor/navigation clicks to enforce session guard except for welcome
+      document.addEventListener('click', async (ev) => {
+        try {
+          const a = ev.target.closest && ev.target.closest('a');
+          if (!a) return;
+          const href = a.getAttribute('href') || '';
+          // ignore links to welcome page
+          if (href.indexOf('welcome') !== -1) return;
+          // only handle local static links
+          if (href && href.startsWith('/')) {
+            // verify keepalive
+            const r = await fetch('/api/keepalive', { method: 'GET', credentials: 'same-origin', cache: 'no-store' });
+            if (!r.ok) {
+              ev.preventDefault();
+              // redirect SPA to welcome
+              renderScreen('welcome');
+              alert('Área restrita: faça login antes de acessar.');
+            }
+          }
+        } catch (e) {
+          // swallow
+        }
+      }, true);
+
+      // show operator info if present
+      (function(){ try{ const op = localStorage.getItem('operator_email'); if(op){ document.getElementById('operator_info').textContent = op; } }catch(e){} })();
+
+      // Disable dashboard interactions until a browser session is detected
+      (function(){
+        const menuButtons = Array.from(document.querySelectorAll('.nav .menu button'));
+        function setDisabled(dis){
+          for(const b of menuButtons){
+            if(dis){ b.setAttribute('disabled','true'); b.style.opacity = '0.55'; b.style.cursor = 'not-allowed'; }
+            else { b.removeAttribute('disabled'); b.style.opacity='1'; b.style.cursor='pointer'; }
+          }
+        }
+        // start disabled
+        setDisabled(true);
+
+        // Check server session via /api/keepalive - if authenticated, enable full UI.
+        // If not authenticated, leave only the welcome tab enabled.
+        (async function(){
+          try{
+            const r = await fetch('/api/keepalive', { method: 'GET', credentials: 'same-origin', cache: 'no-store' });
+            if(r.ok){
+              // if a browser_session_id exists, prefer enabling; otherwise still enable full UI
+              setDisabled(false);
+              return;
+            } else if(r.status === 401){
+              // not authenticated -> keep only welcome enabled
+              // ensure welcome menu button is active and others disabled
+              const welcomeBtn = document.querySelector('.nav .menu button[data-screen="welcome"]');
+              if(welcomeBtn){ document.querySelectorAll('.nav .menu button').forEach(b=>{ if(b !== welcomeBtn){ b.setAttribute('disabled','true'); b.style.opacity='0.55'; b.style.cursor='not-allowed'; } else { b.removeAttribute('disabled'); b.classList.add('active'); } }); }
+              return;
+            }
+          }catch(e){
+            // network error - keep restricted UI
+            return;
+          }
+        })();
+      })();
+
+      // Keepalive: optional background pings to /api/keepalive to prevent Django session timeout
+      (function(){
+        const INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+        let timer = null;
+
+        async function ping(){
+          try{
+            // If a browser session exists on the server, ask it to execute a short fetch
+            try{
+              const bs = localStorage.getItem('browser_session_id');
+              if(bs){
+                // call the browser-targeted endpoint (server will iterate pool managers)
+                await fetch('/api/browser/keepalive', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({session: bs}) });
+              }
+            }catch(e){ /* ignore browser keepalive errors */ }
+
+            const r = await fetch('/api/keepalive', { method: 'GET', credentials: 'same-origin', cache: 'no-store' });
+            if(r.status === 401){
+              // session expired
+              console.warn('Keepalive: session expired (401)');
+              stop();
+              alert('Sua sessão expirou. Faça login novamente.');
+              try{ localStorage.removeItem('browser_session_id'); }catch(e){}
+              return;
+            }
+          }catch(e){ console.warn('Keepalive ping failed', e); }
+        }
+
+        function start(){
+          stop();
+          ping();
+          timer = setInterval(ping, INTERVAL_MS);
+          try{ localStorage.setItem('keep_session_alive','true'); }catch(e){}
+        }
+        function stop(){ if(timer){ clearInterval(timer); timer = null; } try{ localStorage.setItem('keep_session_alive','false'); }catch(e){} }
+
+        // wire up checkbox
+        const chk = document.getElementById('keepalive_chk');
+        try{
+          const stored = localStorage.getItem('keep_session_alive');
+          if(stored === 'true') chk.checked = true;
+        }catch(e){}
+        chk.addEventListener('change', (ev)=>{ if(ev.target.checked) start(); else stop(); });
+
+        // auto-start if user opted in or if browser_session_id exists
+        try{
+          const bs = localStorage.getItem('browser_session_id');
+          const opted = localStorage.getItem('keep_session_alive');
+          if(opted === 'true' || (!!bs && opted !== 'false')){ chk.checked = true; start(); }
+        }catch(e){ /* ignore */ }
+      })();
+
+      // Run action (top-level)
+      async function startRun(){
+        appLog('Iniciando execução...');
+        try{
+          const r = await fetch('/api/run', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+          if(!r.ok){ appLog('Erro run: ' + await r.text()); return; }
+          const j = await r.json(); appLog('Run iniciado: ' + j.run_id);
+          const ws = new WebSocket((location.protocol === 'https:'?'wss://':'ws://') + location.host + '/ws/logs/' + j.run_id);
+          ws.onmessage = (e)=> appLog('WS: ' + e.data);
+          ws.onopen = ()=> appLog('WS conectado');
+          ws.onclose = ()=> appLog('WS fechado');
+        }catch(e){ appLog('Erro: ' + e.message); }
+      }
+
+      // Attach optional run button if present
+      const runBtn = document.getElementById('run');
+      if(runBtn){ runBtn.addEventListener('click', startRun); }
+
+      
+
+      
+
+      // Screen renderers (placeholders mapping to moodar_gui)
+      function renderWelcome(){
+        contentArea.innerHTML = `
+          <h2>Início</h2>
+          <div class="muted">Visão geral</div>
+          <div style="margin-top:12px;display:grid;gap:12px;">
+            <div style="background:white;padding:14px;border-radius:10px;box-shadow:0 6px 14px rgba(0,0,0,0.04)">
+              <h3 style="margin:0 0 8px 0">O que é este software?</h3>
+              <p style="margin:0;color:var(--muted);font-size:14px">Este projeto automatiza ações dentro do painel de administração (Django admin) da Moodar. Ele não é um assistente humano — é uma ferramenta de automação que pode executar tarefas repetitivas no painel administrativo por você.</p>
+            </div>
+
+            <div style="background:white;padding:14px;border-radius:10px;box-shadow:0 6px 14px rgba(0,0,0,0.04)">
+              <h3 style="margin:0 0 8px 0">O que ele pode fazer?</h3>
+              <ul style="margin:0;color:var(--muted);font-size:14px">
+                <li>Atualizar bases de colaboradores (importação de CSV).</li>
+                <li>Executar rotinas administrativas e operações em lote no Django admin.</li>
+                <li>Exportar dados, gerenciar credenciais e outras ações de suporte.</li>
+              </ul>
+            </div>
+
+            <div style="background:white;padding:14px;border-radius:10px;box-shadow:0 6px 14px rgba(0,0,0,0.04)">
+              <h3 style="margin:0 0 8px 0">Leia antes de usar</h3>
+              <p style="margin:0;color:var(--muted);font-size:14px">IMPORTANTE: as ações realizadas por este software são permanentes no sistema da Moodar. Uma vez aplicadas, mudanças como inserções, atualizações ou exclusões podem não ser reversíveis. Use com cautela e confirme que você tem autorização para executar estas operações.</p>
+            </div>
+
+            <div style="background:white;padding:14px;border-radius:10px;box-shadow:0 6px 14px rgba(0,0,0,0.04)">
+              <h3 style="margin:0 0 8px 0">Como proceder</h3>
+              <ol style="margin:0;color:var(--muted);font-size:14px;padding-left:18px">
+                <li>Garanta que você esteja autenticado no Django Admin da Moodar (faça login pelo painel).</li>
+                <li>Leia atentamente as telas de confirmação antes de executar uma ação.</li>
+              </ol>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderAppointments(){
+        contentArea.innerHTML = `<h2>Appointments / Consultas</h2><div class="muted">Ferramentas para agendar ciclos, criar consultas avulsas e ver histórico.</div><div style="margin-top:12px"><button class="btn primary" onclick="window.location.href='/static/appointments/agendar_ciclo.html'">Agendar Ciclo</button> <button class="btn" onclick="window.location.href='/static/appointments/criar_consulta_avulsa.html'">Criar Consulta Avulsa</button> <button class="btn ghost" onclick="window.location.href='/static/appointments/historico.html'">Ver Histórico</button></div>`;
+      }
+
+      function renderParticipants(){
+        contentArea.innerHTML = `<h2>Participantes</h2><div class="muted">Resetar perfis, atualizar status e operações em lote.</div><div style="margin-top:12px"><button class="btn" onclick="window.location.href='/static/participants/reset_profiles.html'">Resetar Perfis</button> <button class="btn" onclick="window.location.href='/static/participants/update_status.html'">Atualizar Status</button></div>`;
+      }
+
+      function renderExport(){
+        contentArea.innerHTML = `<h2>Exportação</h2><div class="muted">Exportar por empresa, histórico e dados.</div><div style="margin-top:12px"><button class="btn" onclick="appLog('Stub: exportar por empresa')">Exportar por Empresa</button></div>`;
+      }
+
+      function renderImport(){
+          contentArea.innerHTML = `<h2>Importação</h2><div class="muted">Importar bases de colaboradores via CSV.</div><div style="margin-top:12px"><button id="go_import_btn" class="btn primary">Importar base</button></div>`;
+          // guarded navigation: verify server session before redirecting
+          const btn = document.getElementById('go_import_btn');
+          if(btn){
+              btn.addEventListener('click', async ()=> {
+                try {
+                  // Instead of relying solely on /api/keepalive (which may return 200
+                  // even when the protected static page would return welcome.html),
+                  // fetch the import page itself with credentials and check its
+                  // content for an import-page marker before performing a client-side
+                  // navigation. This mirrors the behaviour of pressing F5.
+                  const r = await fetch('/static/import/index.html', { method: 'GET', credentials: 'same-origin', cache: 'no-store' });
+                  if (!r.ok) {
+                    renderScreen('welcome');
+                    alert('\u00c1rea restrita: fa\u00e7a login antes de acessar a importa\u00e7\u00e3o.');
+                    return;
+                  }
+                  const txt = await r.text().catch(()=> '');
+                  // detect a small unique marker from the import page (title or header)
+                  if (txt && txt.indexOf('<title>Importa') !== -1) {
+                    // navigate normally so the browser loads the real static page
+                    window.location.href = '/static/import/index.html';
+                    return;
+                  }
+                  // fallback: server returned some other HTML (likely welcome/login)
+                  renderScreen('welcome');
+                  alert('\u00c1rea restrita: fa\u00e7a login antes de acessar a importa\u00e7\u00e3o.');
+                } catch (e) { renderScreen('welcome'); alert('Erro checando sessão: faça login antes de acessar.'); }
+              });
+          }
+        }
+
+      function renderSystem(){
+        contentArea.innerHTML = `<h2>Sistema</h2><div style="display:flex;flex-direction:column;gap:8px;margin-top:12px"><button class="btn" onclick="renderCredentialsManager()">Gerenciar Credenciais</button><button class="btn" onclick="appLog('Stub: ver logs')">Ver Logs</button><button class="btn" onclick="appLog('Stub: sobre')">Sobre</button></div>`;
+      }
+
+      function renderCredentialsManager(){
+        contentArea.innerHTML = `<h2>Gerenciar Credenciais</h2><div class="muted">Listar, baixar e copiar credenciais criptografadas.</div><div style="margin-top:8px"><button class="btn primary" onclick="refreshCredentialsList()">Atualizar</button></div><div id="creds_area" style="margin-top:12px"></div>`;
+        refreshCredentialsList();
+      }
+
+      async function refreshCredentialsList(){
+        const area = document.getElementById('creds_area'); area.innerHTML = 'Carregando...';
+        try{
+          const r = await fetch('/api/credentials', { credentials: 'same-origin' });
+          if(!r.ok){ area.innerHTML = 'Falha ao listar credenciais'; return; }
+          const j = await r.json(); const items = j.credentials || [];
+          if(!items.length){ area.innerHTML = '<div class="muted">Nenhuma credencial encontrada</div>'; return; }
+          const ul = document.createElement('div'); ul.style.display='flex'; ul.style.flexDirection='column'; ul.style.gap='8px';
+          for(const it of items){
+            const row = document.createElement('div');
+            row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.background='white'; row.style.padding='8px'; row.style.borderRadius='8px';
+            const name = document.createElement('div'); name.textContent = it.name;
+            const actions = document.createElement('div');
+            const dl = document.createElement('button');
+            dl.className='btn ghost'; dl.textContent='Download';
+            dl.onclick = ()=> window.open('/api/credentials/' + encodeURIComponent(it.name) + '/download','_blank');
+            const cp = document.createElement('button');
+            cp.className='btn ghost'; cp.textContent='Copiar';
+            cp.onclick = async ()=>{
+              try{
+                const r2 = await fetch('/api/credentials/' + encodeURIComponent(it.name) + '/download', { credentials: 'same-origin' });
+                const t = await r2.text();
+                await navigator.clipboard.writeText(t);
+                appLog('Copiado ' + it.name);
+              }catch(e){ appLog('Falha copiar: ' + e.message); }
+            };
+            actions.appendChild(dl); actions.appendChild(cp);
+            row.appendChild(name); row.appendChild(actions); ul.appendChild(row);
+          }
+          area.innerHTML = ''; area.appendChild(ul);
+        }catch(e){ area.innerHTML = 'Erro: ' + e.message; }
+      }
+
+      // Initialize default screen
+      renderScreen('welcome');
+
+      // If a login job was started from the welcome page, show a transient banner
+      (function(){
+        try{
+          const job = localStorage.getItem('last_login_job');
+          if(!job) return;
+          const banner = document.getElementById('login_banner');
+          const bannerText = document.getElementById('login_banner_text');
+          banner.style.display = 'block';
+          bannerText.textContent = 'Aguardando login (job: ' + job + ')...';
+          const start = Date.now();
+          const timeoutMs = 30_000;
+          async function poll(delay = 800){
+            try{
+              const r = await fetch('/api/jobs/' + encodeURIComponent(job), { credentials: 'same-origin' });
+              if(r.status === 404){ bannerText.textContent = 'Job não encontrado: ' + job; return; }
+              const s = await r.json();
+              if(s && s.ok && s.status){
+                if(s.status.done){ bannerText.textContent = 'Login concluído'; banner.style.display = 'none'; try{ localStorage.removeItem('last_login_job'); }catch(e){}; return; }
+                if(s.status.exception){ bannerText.textContent = 'Job falhou: ' + s.status.exception; return; }
+              }
+            }catch(e){ bannerText.textContent = 'Erro consultando job: ' + e.message; }
+            if(Date.now() - start > timeoutMs){ bannerText.textContent = 'Tempo esgotado aguardando login'; return; }
+            setTimeout(()=> poll(Math.min(3000, delay*1.5)), delay);
+          }
+          poll();
+        }catch(e){ /* ignore */ }
+      })();
+    </script>
+  </body>
+</html>

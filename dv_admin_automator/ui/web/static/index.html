@@ -1,0 +1,397 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DV Admin Automator UI</title>
+    <style>
+      :root{
+        --bg1: linear-gradient(135deg,#ff9ad1 0%,#7bd1ff 100%);
+        --card-bg: rgba(255,255,255,0.85);
+        --accent-pink: #ff4fa3;
+        --accent-blue: #2ea6ff;
+        --muted: #6b6b7a;
+        --glass: rgba(255,255,255,0.6);
+      }
+      html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial}
+      body{
+        background: var(--bg1);
+        display:flex;align-items:center;justify-content:center;padding:2rem;
+      }
+      .container{
+        width:100%;max-width:1100px;background:var(--card-bg);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.12);overflow:hidden;display:grid;grid-template-columns:360px 1fr;
+      }
+      .sidebar{padding:28px;background:linear-gradient(180deg,rgba(255,255,255,0.7),rgba(255,255,255,0.5));border-right:1px solid rgba(0,0,0,0.04)}
+      h1{margin:0;font-size:20px;display:flex;align-items:center;gap:10px}
+      .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent-pink),var(--accent-blue));display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
+      p.lead{color:var(--muted);margin-top:8px;font-size:13px}
+      .controls{margin-top:18px;display:flex;flex-direction:column;gap:10px}
+      .btn{appearance:none;border:0;padding:12px 14px;border-radius:10px;font-weight:600;color:white;cursor:pointer;box-shadow:0 6px 18px rgba(46,166,255,0.12)}
+      .btn.ghost{background:transparent;color:var(--accent-blue);border:1px solid rgba(46,166,255,0.12);box-shadow:none}
+      .btn.pink{background:var(--accent-pink)}
+      .btn.blue{background:var(--accent-blue)}
+      .small{font-size:13px;padding:10px 12px}
+
+      .main{padding:28px}
+      .toolbar{display:flex;gap:12px;align-items:center}
+      .status{margin-left:auto;color:var(--muted);font-size:13px}
+      .panel{margin-top:18px;background:var(--glass);padding:14px;border-radius:10px;min-height:360px;overflow:auto;border:1px solid rgba(0,0,0,0.03)}
+      pre#output{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono',monospace;}
+
+      @media (max-width:900px){.container{grid-template-columns:1fr}.sidebar{order:2}.main{order:1}}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+  <div class="sidebar">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="logo">DV</div>
+          <div>
+            <h1>Automação Dashboard Moodar</h1>
+            <div class="lead">Automação local do Django Admin — protótipo</div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div style="font-size:13px;color:var(--muted);margin-bottom:6px">Activation server: configurado no servidor</div>
+
+          <!-- Activation flow: step-by-step -->
+          <div id="step-request">
+            <label style="font-size:13px;color:var(--muted);margin-top:8px">E-mail do operador</label>
+            <input id="contact" type="email" placeholder="ops@example.com" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)" />
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button id="request_activation" class="btn blue small">Solicitar ativação</button>
+              <button id="reset_flow" class="btn ghost small">Resetar</button>
+            </div>
+          </div>
+
+          <div id="step-wait" style="display:none;margin-top:12px">
+            <div style="font-weight:700">Solicitação criada</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:6px">Aguardando aprovação no painel administrativo. Você receberá um código quando aprovado.</div>
+            <div id="request_info" style="margin-top:8px;color:var(--muted);font-size:13px"></div>
+            <!-- waiting state (no cancel control) -->
+          </div>
+
+          <div id="step-confirm" style="display:none;margin-top:12px">
+            <label style="font-size:13px;color:var(--muted)">Código de ativação</label>
+            <input id="code" type="text" placeholder="12345678" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)" />
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button id="confirm_code" class="btn blue small">Confirmar código</button>
+              <button id="back_to_wait" class="btn ghost small">Voltar</button>
+            </div>
+          </div>
+
+          <div id="step-master" style="display:none;margin-top:12px">
+            <label style="font-size:13px;color:var(--muted)">Chave mestre (master password)</label>
+            <input id="master_password" type="password" placeholder="••••••••" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)" />
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button id="activate" class="btn pink small">Ativar e baixar credenciais</button>
+            </div>
+          </div>
+
+          <div id="step-complete" style="display:none;margin-top:12px">
+            <div style="font-weight:700">Ativação concluída</div>
+            <div id="activation_result" style="margin-top:8px;color:var(--muted);font-size:13px"></div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button id="list" class="btn ghost small">Listar credenciais</button>
+            </div>
+          </div>
+
+          <hr style="border:none;border-top:1px solid rgba(0,0,0,0.04);margin:12px 0" />
+
+          <button id="unlock" class="btn blue small">Desbloquear</button>
+          <button id="run" class="btn" style="background:linear-gradient(90deg,var(--accent-pink),var(--accent-blue))">Iniciar execução</button>
+        </div>
+
+        <div style="margin-top:18px;color:var(--muted);font-size:12px">Conecte-se localmente. Este UI é só para prototipagem.</div>
+      </div>
+
+      <div class="main">
+        <div class="toolbar">
+          <div style="font-weight:700">Ativação</div>
+          <div class="status">Localhost • sem autenticação</div>
+        </div>
+
+        <div style="margin-top:10px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div id="step_bar" style="flex:1;background:rgba(0,0,0,0.04);height:12px;border-radius:8px;overflow:hidden;position:relative">
+              <div id="step_fill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent-pink),var(--accent-blue));transition:width 300ms ease"></div>
+            </div>
+            <div id="step_label" style="font-size:13px;color:var(--muted);min-width:160px;text-align:right">Etapa: Início</div>
+          </div>
+        </div>
+
+        <div class="panel" style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="font-weight:700">Logs</div>
+            <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+              <button id="refresh_creds" class="btn ghost small">Atualizar credenciais</button>
+              <div id="toast_area" style="position:relative"></div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div style="flex:1;min-width:300px">
+              <div style="font-weight:700;margin-bottom:8px">Console</div>
+              <pre id="output" style="margin:0;height:300px;background:rgba(0,0,0,0.03);padding:10px;border-radius:8px;overflow:auto"></pre>
+            </div>
+
+            <div style="width:380px">
+              <div style="font-weight:700;margin-bottom:8px">Credenciais salvas</div>
+              <div id="creds_list" style="background:white;padding:10px;border-radius:8px;min-height:300px;max-height:300px;overflow:auto;border:1px solid rgba(0,0,0,0.04)"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Guided activation flow script
+      const out = document.getElementById('output');
+      function log(msg){ const time = new Date().toLocaleTimeString(); out.textContent += `[${time}] ` + msg + '\n'; out.scrollTop = out.scrollHeight; }
+
+      // Toasts
+      function toast(message, kind = 'info', ms = 3000){
+        const area = document.getElementById('toast_area');
+        const el = document.createElement('div');
+        el.textContent = message;
+        el.style.padding = '8px 12px';
+        el.style.borderRadius = '8px';
+        el.style.marginLeft = '6px';
+        el.style.boxShadow = '0 6px 18px rgba(0,0,0,0.08)';
+        el.style.background = kind === 'error' ? '#ffd6d6' : (kind === 'success' ? '#e6ffef' : 'white');
+        el.style.color = '#222';
+        area.appendChild(el);
+        setTimeout(()=>{ el.style.transition='opacity 0.3s'; el.style.opacity='0'; setTimeout(()=>area.removeChild(el),300); }, ms);
+      }
+
+      // Button helpers
+      function setLoading(btnId, loading=true){
+        const b = document.getElementById(btnId);
+        if(!b) return;
+        b.disabled = loading;
+        if(loading){ b.dataset.prev = b.innerHTML; b.innerHTML = '...'; b.style.opacity=0.7; }
+        else { if(b.dataset.prev) b.innerHTML = b.dataset.prev; b.style.opacity=1; }
+      }
+
+      // Credentials list
+      async function refreshCredentials(){
+        setLoading('refresh_creds', true);
+        try{
+          const resp = await fetch('/api/credentials');
+          if(!resp.ok){ toast('Falha ao listar credenciais', 'error'); log('Erro listagem: ' + await resp.text()); return; }
+          const j = await resp.json();
+          const list = document.getElementById('creds_list');
+          list.innerHTML = '';
+          const items = j.credentials || [];
+          if(!items.length){ list.innerHTML = '<div style="color:var(--muted)">Nenhuma credencial encontrada</div>'; }
+          for(const it of items){
+            const row = document.createElement('div');
+            row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='6px 0';
+            const name = document.createElement('div'); name.textContent = it.name; name.style.fontSize='13px'; name.style.color='#111';
+            const actions = document.createElement('div'); actions.style.display='flex'; actions.style.gap='6px';
+            const dl = document.createElement('button'); dl.className='btn ghost small'; dl.textContent='Download';
+            dl.addEventListener('click', ()=>{ window.open('/api/credentials/' + encodeURIComponent(it.name) + '/download', '_blank'); });
+            const cp = document.createElement('button'); cp.className='btn ghost small'; cp.textContent='Copiar';
+            cp.addEventListener('click', async ()=>{ try{ const r = await fetch('/api/credentials/' + encodeURIComponent(it.name) + '/download'); const t = await r.text(); await navigator.clipboard.writeText(t); toast('Copiado para área de transferência', 'success'); }catch(e){ toast('Falha ao copiar', 'error'); } });
+            actions.appendChild(dl); actions.appendChild(cp);
+            row.appendChild(name); row.appendChild(actions); list.appendChild(row);
+          }
+        }catch(e){ log('Erro listar credenciais: ' + e.message); toast('Erro listagem', 'error'); }
+        finally{ setLoading('refresh_creds', false); }
+      }
+
+      document.getElementById('refresh_creds').addEventListener('click', refreshCredentials);
+      // initial load
+      refreshCredentials();
+
+      // Helpers to show/hide steps
+      function showStep(id){
+        ['step-request','step-wait','step-confirm','step-master','step-complete'].forEach(s => {
+          const el = document.getElementById(s);
+          if(!el) return;
+          el.style.display = (s === id) ? 'block' : 'none';
+        });
+      }
+
+      // Polling for request status
+      let _poll_timer = null;
+      let _current_request_id = null;
+
+      function startPolling(request_id){
+        _current_request_id = request_id;
+        if(_poll_timer) clearInterval(_poll_timer);
+        _poll_timer = setInterval(async ()=>{
+          try{
+            const resp = await fetch('/api/request_status/' + encodeURIComponent(request_id));
+            if(!resp.ok){ log('poll: non-ok'); return; }
+            const j = await resp.json();
+            const st = (j.response && j.response.status) || j.response?.state || j.status;
+            const code = (j.response && j.response.code) || j.response?.code;
+            log('Status poll: ' + JSON.stringify(j.response || j));
+            if(st === 'approved'){
+              if(code){
+                document.getElementById('code').value = String(code);
+                log('Código detectado automaticamente: ' + code);
+              }
+              clearInterval(_poll_timer); _poll_timer = null;
+              // advance to confirm step for automatic flow
+              showStep('step-confirm');
+              setStepProgress(2);
+            }
+          }catch(e){ log('Poll error: ' + e.message); }
+        }, 3000);
+      }
+
+      // Step progress helpers
+      const STEP_MAP = ['Início','Solicitado','Aguardando código','Confirmado','Chave mestre','Concluído'];
+      function setStepProgress(idx){
+        const pct = Math.min(100, Math.max(0, Math.round((idx / (STEP_MAP.length-1)) * 100)));
+        document.getElementById('step_fill').style.width = pct + '%';
+        document.getElementById('step_label').textContent = 'Etapa: ' + (STEP_MAP[idx] || '');
+      }
+
+      // reset flow
+      document.getElementById('reset_flow').addEventListener('click', ()=>{
+        document.getElementById('contact').value = '';
+        document.getElementById('device_info')?.remove();
+        document.getElementById('code').value = '';
+        document.getElementById('master_password').value = '';
+        document.getElementById('request_info').textContent = '';
+        showStep('step-request');
+        log('Fluxo resetado');
+      });
+
+  // start at request step
+  showStep('step-request');
+  setStepProgress(0);
+
+      document.getElementById('request_activation').addEventListener('click', async ()=>{
+        const contact = document.getElementById('contact').value.trim();
+        if(!contact){ log('E-mail do operador é obrigatório'); return; }
+        const payload = { contact };
+        log('Enviando request_activation...');
+        try{
+          const resp = await fetch('/api/request_activation', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+          if(!resp.ok){ const t = await resp.text(); log('Erro request_activation: ' + t); return; }
+          const j = await resp.json();
+          log('Solicitação criada: ' + JSON.stringify(j.response || j));
+          // show waiting step
+          const info = document.getElementById('request_info');
+          info.textContent = `Server response: ${JSON.stringify(j.response || j)}`;
+          showStep('step-wait');
+          setStepProgress(1);
+          // if server returned request_id, start polling
+          const rid = (j.response && j.response.request_id) || j.request_id || (j.response && j.response.payload && j.response.payload.request_id);
+          if(rid){
+            startPolling(rid);
+          }
+          // also allow the operator to enter the code manually immediately
+          const confirmEl = document.getElementById('step-confirm');
+          if(confirmEl){ confirmEl.style.display = 'block'; document.getElementById('code').focus(); }
+        }catch(e){ log('Erro request_activation: ' + e.message); }
+      });
+
+      // removed manual "Informar código" button; flow auto-advances when approved
+
+
+      document.getElementById('back_to_wait').addEventListener('click', ()=>{
+        showStep('step-wait');
+        // restart polling if we had a request id
+        if(_current_request_id){ startPolling(_current_request_id); }
+      });
+
+      // no cancel button: polling runs until approved or user navigates back
+
+      document.getElementById('confirm_code').addEventListener('click', async ()=>{
+        const code = document.getElementById('code').value.trim();
+        if(!code){ log('Código é obrigatório'); return; }
+        log('Confirmando código...');
+        try{
+          const resp = await fetch('/api/confirm_code', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code})});
+          if(resp.ok){ log('Código válido'); showStep('step-master'); setStepProgress(3); } else { const t = await resp.text(); log('Falha confirmação: ' + t); }
+        }catch(e){ log('Erro: ' + e.message) }
+      });
+
+      document.getElementById('activate').addEventListener('click', async ()=>{
+        const code = document.getElementById('code').value.trim();
+        const pw = document.getElementById('master_password').value;
+        // note: base_url input was removed from the UI; do not reference it here
+        if(!code || !pw){ log('Código e chave mestre são obrigatórios'); return; }
+        log('Enviando submit_master_key (activate)...');
+        try{
+          const headers = {'Content-Type':'application/json'};
+          // Only include X-Activation-Base-Url header when an explicit override is provided via window.activationBaseUrl
+          if(window.activationBaseUrl){ headers['X-Activation-Base-Url'] = window.activationBaseUrl; }
+          const resp = await fetch('/api/activate', {method:'POST', headers, body: JSON.stringify({code, master_password: pw})});
+          if(!resp.ok){ const t = await resp.text(); log('Ativação falhou: ' + t); return; }
+          const j = await resp.json();
+          log('Ativação completa: ' + JSON.stringify(j));
+          const resultEl = document.getElementById('activation_result');
+          const saved = j.saved || [];
+          const errors = j.errors || [];
+          let html = '';
+          if(saved.length){ html += `<div style="font-weight:700">Arquivos salvos:</div><ul>`; saved.forEach(s => { html += `<li>${s}</li>` }); html += `</ul>` }
+          if(errors.length){ html += `<div style="font-weight:700;color:#b33">Erros:</div><ul>`; errors.forEach(e => { html += `<li>${e.name}: ${e.error}</li>` }); html += `</ul>` }
+          if(!saved.length && !errors.length){ html = JSON.stringify(j); }
+          resultEl.innerHTML = html;
+          showStep('step-complete');
+          setStepProgress(5);
+
+          // animate saved items into creds list
+          if(saved.length){
+            const list = document.getElementById('creds_list');
+            for(const s of saved){
+              const row = document.createElement('div');
+              row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='6px 0'; row.style.opacity='0'; row.style.transform='translateY(6px)'; row.style.transition='all 300ms ease';
+              const name = document.createElement('div'); name.textContent = s; name.style.fontSize='13px'; name.style.color='#111';
+              const actions = document.createElement('div'); actions.style.display='flex'; actions.style.gap='6px';
+              const dl = document.createElement('button'); dl.className='btn ghost small'; dl.textContent='Download';
+              dl.addEventListener('click', ()=>{ window.open('/api/credentials/' + encodeURIComponent(s.split('/').pop()) + '/download', '_blank'); });
+              const cp = document.createElement('button'); cp.className='btn ghost small'; cp.textContent='Copiar';
+              cp.addEventListener('click', async ()=>{ try{ const r = await fetch('/api/credentials/' + encodeURIComponent(s.split('/').pop()) + '/download'); const t = await r.text(); await navigator.clipboard.writeText(t); toast('Copiado para área de transferência', 'success'); }catch(e){ toast('Falha ao copiar', 'error'); } });
+              actions.appendChild(dl); actions.appendChild(cp);
+              row.appendChild(name); row.appendChild(actions); list.prepend(row);
+              // animate in
+              setTimeout(()=>{ row.style.opacity='1'; row.style.transform='translateY(0)'; }, 60);
+            }
+          }
+        }catch(e){ log('Erro: ' + e.message) }
+      });
+
+      // unlock, list, run minimal handlers (reuse logs)
+      document.getElementById('unlock').addEventListener('click', async ()=>{
+        const pw = document.getElementById('master_password').value;
+        if(!pw){ log('Master password é obrigatório'); return; }
+        log('Tentando desbloquear...');
+        try{
+          const resp = await fetch('/api/unlock', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({master_password: pw})});
+          if(resp.ok){ const j = await resp.json(); log('Unlock ok: ' + JSON.stringify(j)); } else { log('Unlock falhou: ' + await resp.text()); }
+        }catch(e){ log('Erro: ' + e.message) }
+      });
+
+      document.getElementById('list').addEventListener('click', async ()=>{
+        log('Listando credenciais...');
+        try{
+          const resp = await fetch('/api/credentials');
+          if(resp.ok){ const j = await resp.json(); log('Credenciais: ' + JSON.stringify(j)); } else { log('Erro listagem: ' + await resp.text()); }
+        }catch(e){ log('Erro: ' + e.message) }
+      });
+
+      document.getElementById('run').addEventListener('click', async ()=>{
+        log('Iniciando execução...');
+        try{
+          const resp = await fetch('/api/run', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+          if(!resp.ok){ log('Erro iniciando run: ' + await resp.text()); return; }
+          const j = await resp.json();
+          const run_id = j.run_id;
+          log('Run iniciado: ' + run_id + ' - conectando websocket...');
+          const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/logs/' + run_id);
+          ws.onmessage = (e) => log('WS: ' + e.data);
+          ws.onopen = () => log('WS conectado');
+          ws.onclose = () => log('WS fechado');
+        }catch(e){ log('Erro: ' + e.message) }
+      });
+    </script>
+  </body>
+</html>

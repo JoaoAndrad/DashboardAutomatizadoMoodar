@@ -1,0 +1,447 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agendar Ciclo — DV Automator</title>
+    <style>
+      body {
+        font-family: Inter, system-ui, "Segoe UI", Roboto, Arial;
+        margin: 0;
+        background: linear-gradient(135deg, #ff9ad1 0%, #7bd1ff 100%);
+      }
+      .app-wrap {
+        max-width: 1024px;
+        margin: 24px auto;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.96);
+        border-radius: 16px;
+        box-shadow: 0 4px 24px rgba(44,62,80,0.08);
+      }
+      .btn {
+        padding: 10px 18px;
+        border-radius: 8px;
+        border: 0;
+        background: linear-gradient(90deg, #2ea6ff 0%, #7bd1ff 100%);
+        color: white;
+        font-weight: 500;
+        font-size: 1rem;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(44,62,80,0.07);
+        transition: background 0.2s;
+      }
+      .btn:hover {
+        background: linear-gradient(90deg, #1b8edb 0%, #5ec6e7 100%);
+      }
+      .muted {
+        color: #6b6b7a;
+      }
+      .card {
+        background: #f7f9fc;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(44,62,80,0.07);
+        border: 1px solid #e9eef6;
+        padding: 18px 22px;
+        margin-bottom: 16px;
+      }
+      .cycle-card {
+        background: #fff;
+        border-radius: 10px;
+        border: 1.5px solid #e0e4ea;
+        box-shadow: 0 2px 8px rgba(52,152,219,0.07);
+        padding: 16px 18px;
+        margin-bottom: 12px;
+        cursor: pointer;
+        transition: box-shadow 0.2s, border 0.2s, background 0.2s;
+        font-size: 1.05em;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .cycle-card.selected, .cycle-card:hover {
+        box-shadow: 0 4px 16px rgba(52,152,219,0.13);
+        border-color: #2ea6ff;
+        background: #eaf6ff;
+      }
+      .cycle-form-card {
+        background: #f7f9fc;
+        border-radius: 12px;
+        border: 1.5px solid #e0e4ea;
+        box-shadow: 0 2px 8px rgba(44,62,80,0.07);
+        padding: 24px 28px 18px 28px;
+        max-width: 440px;
+        margin-top: 8px;
+      }
+      .cycle-form-card label {
+        font-weight: 500;
+        color: #2c3e50;
+        margin-bottom: 2px;
+        display: block;
+      }
+      .cycle-form-card input {
+        width: 100%;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        margin-bottom: 14px;
+        font-size: 1em;
+      }
+      .cycle-form-card button {
+        margin-top: 8px;
+      }
+      .candidate-card {
+        background: #fff;
+        border-radius: 10px;
+        border: 1.5px solid #e0e4ea;
+        box-shadow: 0 2px 8px rgba(44,62,80,0.07);
+        padding: 14px 18px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: box-shadow 0.2s, border 0.2s, background 0.2s;
+      }
+      .candidate-card:hover {
+        box-shadow: 0 4px 16px rgba(52,152,219,0.10);
+        border-color: #2ea6ff;
+        background: #f0f7ff;
+      }
+      @media (max-width: 600px) {
+        .app-wrap { max-width: 100% !important; padding: 0 4px; }
+        .cycle-form-card { padding: 12px 6px; }
+        .cycle-card, .candidate-card { padding: 10px 6px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-wrap">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2>Agendar Ciclo</h2>
+        <button class="btn" id="back_btn">← Voltar</button>
+      </div>
+
+      <p class="muted">
+        Use este formulário para pesquisar um participante, revisar o histórico e visualizar os participantes encontrados.
+      </p>
+
+      <section style="margin-top:12px">
+        <label for="participant_input">Participante (ID, nome, CPF, telefone ou email):</label>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <input
+            id="participant_input"
+            placeholder="Digite ID, nome, CPF, telefone ou email"
+            style="flex:1;padding:8px;border-radius:8px;border:1px solid #e0e0e0"
+          />
+          <select
+            id="session_selector"
+            style="width:260px;padding:8px;border-radius:8px;border:1px solid #e0e0e0;margin-left:8px"
+          >
+            <option value="">Sessão do navegador (opcional)</option>
+          </select>
+          <button id="create_session_btn" class="btn" style="background:#2ecc71;margin-left:8px">
+            Criar sessão
+          </button>
+          <button class="btn" id="search_btn">Buscar histórico</button>
+        </div>
+      </section>
+
+      <section id="candidates_section" style="margin-top:12px;display:none">
+        <h3>Selecione o participante correto</h3>
+        <div id="candidates_list"></div>
+        <div style="margin-top:8px;color:#666">
+          Clique no participante desejado para carregar o histórico.
+        </div>
+      </section>
+
+
+      <section id="history_section" style="margin-top:16px;display:none">
+        <div id="cycle_options" style="margin-top:18px;"></div>
+        <div id="cycle_form_wrap" style="margin-top:18px;"></div>
+      </section>
+
+      <section id="logs_section" style="margin-top:12px;display:none">
+        <h3>Logs / Status</h3>
+        <pre
+          id="logs"
+          style="height:180px;overflow:auto;background:#0b1220;color:#e6f1ff;padding:12px;border-radius:8px"
+        ></pre>
+      </section>
+    </div>
+
+    <script>
+      // Navegar de volta para o dashboard
+      document.getElementById("back_btn").addEventListener("click", function () {
+        window.location.href = "/static/dashboard.html";
+      });
+
+      const $participant = document.getElementById("participant_input");
+      const $search = document.getElementById("search_btn");
+  const $history_section = document.getElementById("history_section");
+      const $candidates_section = document.getElementById("candidates_section");
+      const $candidates_list = document.getElementById("candidates_list");
+      const $logs_section = document.getElementById("logs_section");
+      const $logs = document.getElementById("logs");
+
+      function appendLog(text) {
+        const now = new Date().toLocaleTimeString();
+        $logs.textContent += `[${now}] ${text}\n`;
+        $logs.scrollTop = $logs.scrollHeight;
+        $logs_section.style.display = "";
+      }
+
+      async function fetchHistory(identifier) {
+        appendLog("Buscando histórico para: " + identifier);
+        const sid = document.getElementById("session_selector").value;
+        appendLog("Session id detectado: " + (sid || "[nenhuma]"));
+
+        const q =
+          "/api/appointments/history?participant=" +
+          encodeURIComponent(identifier) +
+          (sid ? `&browser_session_id=${encodeURIComponent(sid)}` : "");
+        let res, data;
+        try {
+          res = await fetch(q, { credentials: "same-origin" });
+          try {
+            data = await res.json();
+          } catch {
+            data = null;
+          }
+        } catch (e) {
+          appendLog("Erro ao buscar histórico: " + e.message);
+          return null;
+        }
+
+          if (!res.ok || !data) {
+          if (data) {
+            appendLog("Resposta do servidor: " + (data.message || JSON.stringify(data)));
+          } else {
+            appendLog("Erro HTTP: " + res.status + " " + res.statusText);
+          }
+          return null;
+        }
+          appendLog('history response: ' + JSON.stringify(data));
+
+        if (data && data.ok === false) {
+          appendLog("Servidor respondeu com erro: " + (data.error || JSON.stringify(data)));
+          appendLog("Mensagem: " + (data.message || JSON.stringify(data)));
+          return null;
+        }
+
+        return data;
+      }
+
+
+      function renderHistory(data) {
+        if (!data) {
+          // hide section and clear options when no data
+          $history_section.style.display = "none";
+          document.getElementById('cycle_options').innerHTML = '';
+          document.getElementById('cycle_form_wrap').innerHTML = '';
+          return;
+        }
+
+        // Prepare participant info and show section
+        const p = window._selectedCandidate || data.participant || data || {};
+        const $cycle_options = document.getElementById('cycle_options');
+        // small participant header inside the cycle options area
+        const participantInfo = `
+          <div class="card" style="margin-bottom:12px">
+            <div><strong>Nome:</strong> ${p.name || p.patient_name || p.nome || ''}</div>
+            <div><strong>ID:</strong> ${p.id || p.patient_id || ''}</div>
+            <div><strong>Telefone:</strong> ${p.phone || p.telefone || ''}</div>
+          </div>
+        `;
+        $cycle_options.innerHTML = participantInfo;
+        $history_section.style.display = "";
+
+        // Exibir opções de ciclo
+        const cycles = data.cycles || [];
+        appendLog('cycles found: ' + cycles.length + ' => ' + JSON.stringify(cycles));
+        // ensure form wrap cleared
+        document.getElementById('cycle_form_wrap').innerHTML = '';
+        if (cycles.length) {
+          // add header after participant info
+          const header = document.createElement('div');
+          header.innerHTML = '<h4 style="margin-bottom:12px">Selecione o ciclo a ser replicado:</h4>';
+          $cycle_options.appendChild(header);
+          cycles.forEach((cycle, idx) => {
+            const tipo = cycle.plan.toLowerCase().includes('quinzenal') ? 'Quinzenal' : 'Semanal';
+            const min = cycle.plan.toLowerCase().includes('basico') ? 20 :
+                        cycle.plan.toLowerCase().includes('trinta') ? 30 : 40;
+            const div = document.createElement('div');
+            div.className = 'cycle-card';
+            div.innerHTML = `
+              <b>Plano:</b> ${cycle.plan} &nbsp; <b>Terapeuta:</b> ${cycle.therapist} &nbsp; <b>Tipo:</b> ${tipo} &nbsp; <b>Minutagem:</b> ${min} min &nbsp; <b>Ocorrências:</b> ${cycle.matches}
+            `;
+            div.onclick = () => showCycleForm(cycle, tipo, min, p, data.participant_id || p.id || p.patient_id || '');
+            $cycle_options.appendChild(div);
+          });
+        }
+      }
+
+      function showCycleForm(cycle, tipo, min, p, participant_id) {
+        const $wrap = document.getElementById('cycle_form_wrap');
+        $wrap.innerHTML = `
+          <form id="cycle_form" class="cycle-form-card">
+            <h4 style="margin-bottom:14px">Agendar novo ciclo</h4>
+            <label>Terapeuta:<input name="therapist" value="${cycle.therapist}" required></label>
+            <label>Plano:<input name="plan" value="${cycle.plan}" required></label>
+            <label>Data de início:<input name="start_date" type="date" required></label>
+            <label>Hora:<input name="start_time" type="time" required></label>
+            <label>Tipo de plano:<input name="tipo" value="${tipo}" readonly></label>
+            <label>Minutagem:<input name="minutagem" value="${min}" required></label>
+            <label>Quantidade de consultas:<input name="quantidade" type="number" min="1" value="${tipo==='Quinzenal'?3:5}" required></label>
+            <button type="submit" class="btn">Iniciar Agendamento</button>
+          </form>
+        `;
+        document.getElementById('cycle_form').onsubmit = async function(e) {
+          e.preventDefault();
+          const form = e.target;
+          const payload = {
+            participant_id: participant_id,
+            participant_name: (p && (p.name || p.patient_name || p.nome)) || '',
+            therapist: form.therapist.value,
+            plan: form.plan.value,
+            start_date: form.start_date.value,
+            start_time: form.start_time.value,
+            tipo: form.tipo.value,
+            minutagem: form.minutagem.value,
+            quantidade: Number(form.quantidade.value)
+          };
+          appendLog('Enviando dados para agendamento: ' + JSON.stringify(payload));
+          try {
+            const resp = await fetch('/api/appointments/schedule', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            if (data.ok) {
+              appendLog('✅ Agendamento realizado! Consultas criadas: ' + (data.created ? data.created.length : 0));
+              if (data.failed && data.failed.length > 0) {
+                appendLog('⚠️ Falhas: ' + data.failed.map(f => f.date + ': ' + (f.error || 'erro')).join('; '));
+              }
+            } else {
+              appendLog('❌ Erro no agendamento: ' + (data.error || JSON.stringify(data)));
+            }
+          } catch (err) {
+            appendLog('❌ Erro na requisição: ' + err);
+          }
+        };
+      }
+
+      $search.addEventListener("click", async () => {
+        // Clear previous selections and UI state so search always starts fresh
+        try {
+          window._selectedCandidate = null;
+        } catch (e) {}
+        document.getElementById('candidates_list').innerHTML = '';
+        document.getElementById('cycle_options').innerHTML = '';
+        document.getElementById('cycle_form_wrap').innerHTML = '';
+        $candidates_section.style.display = 'none';
+        $history_section.style.display = 'none';
+
+        const val = $participant.value.trim();
+        if (!val) {
+          appendLog("Informe um participante");
+          return;
+        }
+        appendLog("Iniciando busca...");
+        const data = await fetchHistory(val);
+        if (!data) return;
+
+        if (Array.isArray(data.participants) && data.participants.length > 0) {
+          $candidates_list.innerHTML = "";
+          data.participants.forEach((p, idx) => {
+            const div = document.createElement("div");
+            div.className = "candidate-card";
+            div.innerHTML = `
+              <div style="font-size:16px;font-weight:bold;">${p.name || p.patient_name || p.nome || p.id || "#" + idx}</div>
+              <div style="font-size:13px;color:#444;"><strong>Email:</strong> ${p.email || ""}</div>
+              <div style="font-size:13px;color:#444;"><strong>Plano:</strong> ${p.plan || p.plano || ""}</div>
+              <div style="font-size:13px;color:#444;"><strong>Status:</strong> ${p.status || ""}</div>
+              <div style="font-size:13px;color:#444;"><strong>Terapeuta:</strong> ${p.therapist || p.terapeuta || ""}</div>
+              <div style="font-size:13px;color:#444;"><strong>Telefone:</strong> ${p.phone || p.telefone || ""}</div>
+              <div style="font-size:13px;color:#444;"><strong>ID:</strong> ${p.id || p.patient_id || ""}</div>
+            `;
+            div.addEventListener("click", async () => {
+              // store selected candidate globally so we can reuse the displayed name later
+              window._selectedCandidate = p;
+              appendLog("Selecionado: " + (p.name || p.id || ""));
+              // Busca histórico detalhado pelo id (e nome, se necessário)
+              let params = `participant_id=${encodeURIComponent(p.id)}`;
+              if (p.name) params += `&participant_name=${encodeURIComponent(p.name)}`;
+              const sid = document.getElementById("session_selector").value;
+              if (sid) params += `&browser_session_id=${encodeURIComponent(sid)}`;
+              appendLog("Buscando histórico detalhado para o participante id: " + p.id);
+              let res, data;
+              try {
+                res = await fetch(`/api/appointments/history?${params}`, { credentials: "same-origin" });
+                try { data = await res.json(); } catch { data = null; }
+              } catch (e) {
+                appendLog("Erro ao buscar histórico detalhado: " + e.message);
+                return;
+              }
+              if (!res.ok || !data) {
+                appendLog("Erro ao buscar histórico detalhado.");
+                renderHistory(null);
+                return;
+              }
+              renderHistory(data);
+            });
+            $candidates_list.appendChild(div);
+          });
+          $candidates_section.style.display = "";
+        } else {
+          appendLog("Nenhum participante encontrado.");
+          $candidates_section.style.display = "none";
+          renderHistory(null);
+        }
+      });
+
+      // Carregar sessões
+      async function loadSessions() {
+        try {
+          const res = await fetch("/api/browser/sessions", { credentials: "same-origin" });
+          if (!res.ok) return;
+          const j = await res.json();
+          const sel = document.getElementById("session_selector");
+          if (j && j.sessions && j.sessions.length) {
+            j.sessions.forEach((s) => {
+              const o = document.createElement("option");
+              o.value = s.id;
+              o.textContent = `${s.id} (${s.headless ? "headless" : "visible"})`;
+              sel.appendChild(o);
+            });
+          }
+        } catch {}
+      }
+
+      loadSessions();
+
+      document.getElementById("create_session_btn").addEventListener("click", async function () {
+        appendLog("Criando sessão de navegador visível...");
+        try {
+          const res = await fetch("/api/browser/sessions", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ headless: false }),
+          });
+          if (!res.ok) {
+            appendLog("Falha ao criar sessão");
+            return;
+          }
+          const j = await res.json();
+          if (j && j.browser_session_id) {
+            appendLog("Sessão criada: " + j.browser_session_id);
+            const sel = document.getElementById("session_selector");
+            sel.innerHTML = '<option value="">Sessão do navegador (opcional)</option>';
+            await loadSessions();
+            sel.value = j.browser_session_id;
+          }
+        } catch (e) {
+          appendLog("Erro ao criar sessão: " + e.message);
+        }
+      });
+    </script>
+  </body>
+</html>

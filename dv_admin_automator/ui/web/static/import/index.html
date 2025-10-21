@@ -1,0 +1,658 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Importação — DV Automator</title>
+    <style>
+      :root{ --bg1: linear-gradient(135deg,#ff9ad1 0%,#7bd1ff 100%); --card-bg: rgba(255,255,255,0.98); --accent-pink:#ff4fa3; --accent-blue:#2ea6ff; --muted:#6b6b7a }
+      html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
+      body{display:flex;align-items:flex-start;justify-content:center;background:var(--bg1);padding:24px}
+      .wrap{width:100%;max-width:1100px}
+      .card{background:var(--card-bg);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,0.10);overflow:hidden}
+      .card .header{display:flex;align-items:center;justify-content:space-between;padding:18px;border-bottom:1px solid rgba(0,0,0,0.04)}
+      .logo{width:44px;height:44px;border-radius:8px;background:linear-gradient(135deg,var(--accent-pink),var(--accent-blue));display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
+      .title{font-weight:700;font-size:18px}
+      .muted{color:var(--muted);font-size:13px}
+      .content{padding:18px;display:grid;grid-template-columns:1fr 320px;gap:18px}
+      .form-row{display:flex;flex-direction:column;gap:8px}
+      .input, input[type=text]{width:100%;padding:10px;border-radius:8px;border:1px solid #e6e6ef}
+      .controls{display:flex;flex-direction:column;gap:8px}
+      .btn{appearance:none;border:0;padding:10px 12px;border-radius:8px;font-weight:600;color:white;cursor:pointer}
+      .btn.primary{background:linear-gradient(90deg,var(--accent-pink),var(--accent-blue))}
+      .btn.ghost{background:transparent;color:var(--muted);border:1px solid rgba(0,0,0,0.04)}
+      .panel{background:white;border-radius:10px;padding:12px;box-shadow:0 6px 16px rgba(0,0,0,0.04)}
+      table{width:100%;border-collapse:collapse}
+      th,td{border:1px solid #f1f1f6;padding:8px;text-align:left}
+      #logs{white-space:pre-wrap;font-family:monospace;background:#f7f7f7;padding:8px;border-radius:6px;height:200px;overflow:auto}
+      @media(max-width:900px){ .content{grid-template-columns:1fr} }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <div class="header">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="logo">DV</div>
+            <div>
+              <div class="title">Importação de Bases</div>
+              <div class="muted">Envie um CSV/XLSX para pré-visualizar e iniciar a importação</div>
+            </div>
+          </div>
+          <div>
+            <button class="btn ghost" onclick="goBack()">← Voltar para Dashboard</button>
+          </div>
+        </div>
+
+        <div class="content">
+      <div>
+        <div style="display:flex;gap:12px;align-items:center">
+                <input type="file" id="file_input" />
+                <button id="upload_btn" class="btn primary">Fazer upload e pré-visualizar</button>
+                <div style="margin-top:10px;display:flex;gap:8px">
+                  <button id="refresh_companies_btn" class="btn ghost" style="flex:1">Atualizar cache de empresas</button>
+                </div>
+              </div>
+
+              <div id="company_block" style="margin-top:14px; display: none;" class="form-row">
+                <label style="font-weight:600">🏢 Nome da Empresa</label>
+                <div style="display:flex;gap:8px">
+                  <input id="company_input" type="text" placeholder="Digite o nome da empresa" class="input" aria-label="Nome da empresa" />
+                    <div id="company_suggestions" style="position:relative"></div>
+                  <button id="company_search_btn" class="btn ghost" aria-label="Buscar empresas">Buscar</button>
+                </div>
+                <div id="company_search_results" style="margin-top:8px"></div>
+                <div id="company_selected" style="margin-top:6px;color:#2a7;display:none">Empresa selecionada: <span id="company_selected_name"></span></div>
+              </div>
+
+              <div style="margin-top:12px" class="form-row">
+                <label style="font-weight:600">⚙️ Tipo de Base</label>
+                <div style="display:flex;gap:12px;align-items:center">
+                  <label><input type="radio" name="import_type" value="auto" checked /> Automático</label>
+                  <label><input type="radio" name="import_type" value="email" /> Email</label>
+                  <label><input type="radio" name="import_type" value="cpf" /> CPF</label>
+                </div>
+              </div>
+
+              <!-- Execution options removed: always use existing browser session -->
+            </div>
+
+            <div id="preview_area" style="margin-top:16px"></div>
+            <div id="detection_area" style="margin-top:12px;color:#333"></div>
+          </div>
+
+          <div>
+            <div class="panel">
+              <h3 style="margin:0 0 8px 0">Ações</h3>
+              <div class="controls">
+                <div style="display:flex;gap:8px">
+                  <button id="start_btn" class="btn primary" style="flex:1">Iniciar importação</button>
+                  <button id="confirm_import_btn" class="btn ghost" style="display:none;margin-left:8px">Confirmar importação</button>
+                  <button id="cancel_import_btn" class="btn ghost" style="display:none;margin-left:8px">Cancelar importação</button>
+                </div>
+                <div style="font-size:13px;color:var(--muted);">Acompanhe os logs da importação abaixo.</div>
+                <div id="logs" style="margin-top:12px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+  const input = document.getElementById('file_input');
+  const uploadBtn = document.getElementById('upload_btn');
+  // keep upload button hidden until a file is chosen
+  uploadBtn.style.display = 'none';
+  const previewArea = document.getElementById('preview_area');
+
+  uploadBtn.addEventListener('click', async () => {
+    if (!input.files || !input.files.length) { alert('Escolha um arquivo primeiro'); return; }
+    const f = input.files[0];
+    const form = new FormData(); form.append('file', f);
+    uploadBtn.disabled = true; uploadBtn.textContent = 'Enviando...';
+    try {
+      const r = await fetch('/api/import/upload', { method: 'POST', body: form });
+      if (!r.ok) { const t = await r.text(); previewArea.innerHTML = '<div style="color:#b00">Falha: ' + t + '</div>'; return; }
+  const j = await r.json();
+  // render preview and detection (if available)
+  renderPreview(j.preview);
+  renderDetection(j.detection || {});
+  // show company selection now that a file has been uploaded and previewed
+  try { document.getElementById('company_block').style.display = ''; } catch(e){}
+      // capture upload id and ensure start button is available
+      window._last_upload_id = j.upload_id;
+  // re-evaluate start button state (may depend on session + upload)
+  try { evaluateStartButtonState(); } catch (e) { /* ignore */ }
+      // when a new file is uploaded, clear company selection (to avoid accidental reuse)
+      selected_company_id = null;
+      companySelectedDiv.style.display = 'none';
+      // previous layout used a #start_area wrapper; in the redesign the start button lives directly
+      const _sb = document.getElementById('start_btn');
+      if (_sb) {
+        try { _sb.focus(); } catch (e) { /* ignore focus errors */ }
+      }
+    } catch (e) { previewArea.innerHTML = '<div style="color:#b00">Erro: ' + e.message + '</div>'; }
+    finally { uploadBtn.disabled = false; uploadBtn.textContent = 'Fazer upload e pré-visualizar'; }
+  });
+
+  function renderPreview(p) {
+    if (!p || !p.columns) { previewArea.innerHTML = '<div class="muted">Sem preview disponível</div>'; return; }
+    // show a short preview (first 10 rows) and total row count
+    const rows = Array.isArray(p.rows) ? p.rows : [];
+    const total = rows.length;
+    const showRows = rows.slice(0, 10);
+    let html = '<h3>Preview</h3><div class="muted">Mostrando ' + showRows.length + ' de ' + total + ' linhas</div>';
+    html += '<table><thead><tr>' + p.columns.map(c => '<th>' + escapeHtml(c) + '</th>').join('') + '</tr></thead><tbody>';
+    for (const row of showRows) {
+      html += '<tr>' + p.columns.map(c => '<td>' + escapeHtml(row[c] == null ? '' : String(row[c])) + '</td>').join('') + '</tr>';
+    }
+    html += '</tbody></table>';
+    previewArea.innerHTML = html;
+  }
+
+  const detectionArea = document.getElementById('detection_area');
+  function renderDetection(d) {
+    if (!d || Object.keys(d).length === 0) { detectionArea.innerHTML = ''; return; }
+    // detection: { type: 'cpf'|'email'|'name'|'unknown', candidates: {cpf: [..], email: [..], name: [..]}, preview: {...} }
+    let html = '<h3>Detecção</h3>';
+    html += '<div><strong>Tipo detectado:</strong> ' + escapeHtml(d.type || 'desconhecido') + '</div>';
+    if (d.candidates) {
+      html += '<div style="margin-top:8px"><strong>Colunas candidatas:</strong><div style="margin-top:6px">';
+      for (const key of Object.keys(d.candidates)) {
+        // candidates may be an array, a single string, or null
+        const raw = d.candidates[key];
+        let arr = [];
+        if (Array.isArray(raw)) arr = raw;
+        else if (raw == null) arr = [];
+        else if (typeof raw === 'string') arr = [raw];
+        else {
+          try { arr = Array.from(raw); } catch (e) { arr = [String(raw)]; }
+        }
+        if (!arr || arr.length === 0) continue;
+        html += '<div style="margin-bottom:6px"><em>' + escapeHtml(key) + ':</em> ' + arr.map(x => '<code style="background:#f0f0f0;padding:2px 6px;border-radius:4px;margin-right:4px">' + escapeHtml(x) + '</code>').join('') + '</div>';
+      }
+      html += '</div></div>';
+    }
+    detectionArea.innerHTML = html;
+    // auto-select import_type radio based on detection.type
+    try {
+      const t = (d && d.type) ? String(d.type).toLowerCase() : '';
+      let sel = 'auto';
+      if (t === 'cpf' || t === 'cnpj' || t === 'document') sel = 'cpf';
+      else if (t === 'email') sel = 'email';
+      // try to find and check the radio
+      const input = document.querySelector('input[name="import_type"][value="' + sel + '"]');
+      if (input) input.checked = true;
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // cancel import button handler
+  const cancelBtn = document.getElementById('cancel_import_btn');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', async () => {
+      if (!window._last_job_id) { alert('Nenhum job ativo para cancelar'); return; }
+      cancelBtn.disabled = true; cancelBtn.textContent = 'Cancelando...';
+      try {
+        const r = await fetch('/api/import/' + encodeURIComponent(window._last_job_id) + '/cancel', { method: 'POST', credentials: 'same-origin' });
+        if (!r.ok) { alert('Falha cancelar: ' + await r.text()); cancelBtn.disabled = false; cancelBtn.textContent = 'Cancelar importação'; return; }
+        const j = await r.json(); logsEl.textContent += '\nCancel request sent. Server responded: ' + JSON.stringify(j);
+        // hide confirm/cancel and stop any polling logic (we rely on status.poll to hide eventually)
+        const cb = document.getElementById('confirm_import_btn'); if (cb) cb.style.display = 'none';
+        cancelBtn.style.display = 'none';
+      } catch (e) { logsEl.textContent += '\nErro cancel: ' + e.message; }
+      finally { try { cancelBtn.disabled = false; cancelBtn.textContent = 'Cancelar importação'; } catch(e){} }
+    });
+  }
+
+  function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  function goBack() { window.location.href = '/static/dashboard.html'; }
+  // start import flow
+  const startBtn = document.getElementById('start_btn');
+  const logsEl = document.getElementById('logs');
+  // the UI now always uses the existing browser session (session-based flow)
+  const companySearchBtn = document.getElementById('company_search_btn');
+  const companyResults = document.getElementById('company_search_results');
+  const companySelectedDiv = document.getElementById('company_selected');
+  const companySelectedName = document.getElementById('company_selected_name');
+  let selected_company_id = null;
+  // helper to check browser session status
+  async function checkBrowserSession(sessionId) {
+    if (!sessionId) return {exists:false, active:false};
+    try {
+      const r = await fetch('/api/browser/session/' + encodeURIComponent(sessionId) + '/status');
+      if (!r.ok) return {exists:false, active:false};
+      const j = await r.json();
+      return {exists: !!j.exists, active: !!j.active, url: j.url, error: j.error};
+    } catch (e) { return {exists:false, active:false, error: e.message}; }
+  }
+
+  async function evaluateStartButtonState() {
+    // default: disabled until upload
+    if (!startBtn) return;
+    // always use existing browser session: require session id and company selection and upload
+    const sessionId = localStorage.getItem('browser_session_id');
+    if (!sessionId) {
+      startBtn.disabled = true; startBtn.textContent = 'Nenhuma sessão detectada'; return;
+    }
+    if (!selected_company_id) {
+      startBtn.disabled = true; startBtn.classList.remove('primary'); startBtn.style.background = '#cfcfd6'; startBtn.textContent = 'Selecione a empresa'; return;
+    }
+    const hasUpload = !!window._last_upload_id;
+    if (!hasUpload) { startBtn.disabled = true; startBtn.textContent = 'Faça upload antes'; return; }
+    // verify session is active
+    startBtn.disabled = true; startBtn.classList.remove('primary'); startBtn.style.background = '#cfcfd6'; startBtn.textContent = 'Aguardando sessão...';
+    const s = await checkBrowserSession(sessionId);
+    const onDashboard = s && s.url && String(s.url).toLowerCase().indexOf('/moodashboard') !== -1;
+    if (s && s.active) {
+      startBtn.disabled = false; startBtn.classList.add('primary'); startBtn.style.background='';
+      startBtn.textContent = onDashboard ? 'Iniciar importação' : 'Iniciar importação (sessão detectada)';
+    } else {
+      startBtn.disabled = true; startBtn.textContent = 'Iniciar importação (necessita login)';
+    }
+  }
+
+  // checkbox removed: always use session. evaluate state on load and when local storage changes
+  window.addEventListener('storage', (e) => { if (e.key === 'browser_session_id' || e.key === 'last_login_job') evaluateStartButtonState(); });
+
+  // react to changes on import type selection
+  document.querySelectorAll('input[name="import_type"]').forEach(el => el.addEventListener('change', () => { evaluateStartButtonState(); }));
+
+  // company search helper
+  async function searchCompanies(q) {
+    try {
+      const url = '/api/companies' + (q ? '?q=' + encodeURIComponent(q) : '');
+      const r = await fetch(url);
+      if (!r.ok) return [];
+      const j = await r.json();
+      return Array.isArray(j) ? j : (j.items || []);
+    } catch (e) { return []; }
+  }
+
+  function renderCompanyResults(list) {
+    companyResults.innerHTML = '';
+    if (!list || list.length === 0) { companyResults.innerHTML = '<div class="muted">Nenhuma empresa encontrada</div>'; return; }
+    const ul = document.createElement('div');
+    ul.style.display = 'flex'; ul.style.flexDirection = 'column'; ul.style.gap = '6px';
+    list.forEach(it => {
+      const row = document.createElement('div');
+      row.style.display = 'flex'; row.style.justifyContent = 'space-between'; row.style.alignItems = 'center';
+      const left = document.createElement('div');
+      left.style.display = 'flex'; left.style.flexDirection = 'column';
+      const title = document.createElement('div'); title.style.fontWeight = '600'; title.textContent = it.name || '';
+      const meta = document.createElement('div'); meta.style.fontSize = '12px'; meta.style.color = 'var(--muted)';
+      // if a URL is present, render the ID as a clickable link; otherwise render plain text
+      if (it.url) {
+        const a = document.createElement('a'); a.href = it.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = `ID: ${it.id}`;
+        meta.appendChild(a);
+      } else {
+        meta.textContent = `ID: ${it.id}`;
+      }
+      left.appendChild(title); left.appendChild(meta);
+      const btn = document.createElement('button'); btn.className = 'btn ghost'; btn.textContent = 'Selecionar';
+      btn.addEventListener('click', () => { selectCompany(it); });
+      row.appendChild(left); row.appendChild(btn);
+      ul.appendChild(row);
+    });
+    companyResults.appendChild(ul);
+  }
+
+  function selectCompany(item) {
+    selected_company_id = item.id;
+    // Prefer the item's name; fallback to the local companies map populated by a recent cache refresh
+    const name = item.name || (window._companies_map && window._companies_map[String(item.id)]) || '';
+    companySelectedName.textContent = `${name} (${item.id})`;
+    companySelectedDiv.style.display = 'block';
+    companyResults.innerHTML = '';
+    // re-evaluate start button availability
+    evaluateStartButtonState();
+  }
+
+  // lightweight typeahead using legacy companies map
+  window._legacy_companies_map = window._legacy_companies_map || {};
+  async function loadLegacyCompanies() {
+    try {
+      const r = await fetch('/api/companies/legacy');
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j && typeof j === 'object') {
+        window._legacy_companies_map = j; // {id: name}
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function showSuggestions(items) {
+    const container = document.getElementById('company_suggestions');
+    container.innerHTML = '';
+    if (!items || items.length === 0) return;
+    const panel = document.createElement('div');
+    panel.style.position = 'absolute'; panel.style.background = 'white'; panel.style.border = '1px solid #e6e6ef'; panel.style.borderRadius = '6px'; panel.style.width = '100%'; panel.style.maxHeight = '220px'; panel.style.overflow = 'auto'; panel.style.zIndex = 9999; panel.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)';
+    items.forEach(it => {
+      const row = document.createElement('div');
+      row.style.padding = '8px'; row.style.cursor = 'pointer'; row.style.borderBottom = '1px solid #f4f4f8';
+      row.textContent = it.name;
+      row.addEventListener('click', () => {
+        // set input, select company
+        document.getElementById('company_input').value = it.name;
+        selectCompany({ id: it.id, name: it.name });
+        container.innerHTML = '';
+      });
+      panel.appendChild(row);
+    });
+    container.appendChild(panel);
+  }
+
+  document.getElementById('company_input').addEventListener('input', async (ev) => {
+    const v = ev.target.value || '';
+    if (!v || v.length < 2) { showSuggestions([]); return; }
+    // if we have no cached companies, fetch suggestions from server as user types
+    const map = window._legacy_companies_map || {};
+    const hasCache = Object.keys(map).length > 0;
+    const q = v.toLowerCase();
+    if (!hasCache) {
+      try {
+        const serverList = await searchCompanies(v);
+        if (serverList && serverList.length > 0) {
+          // serverList is an array of {id,name,...}
+          const items = serverList.slice(0, 12).map(it => ({ id: it.id, name: it.name || '' }));
+          showSuggestions(items);
+          return;
+        } else {
+          showCacheEmptySuggestion();
+          return;
+        }
+      } catch (e) {
+        showCacheEmptySuggestion();
+        return;
+      }
+    }
+    // prefix match first, then substring from local cache
+    const items = [];
+    try {
+      for (const [id, name] of Object.entries(map)) {
+        if (!name) continue;
+        const lname = String(name).toLowerCase();
+        if (lname.startsWith(q)) items.push({ id, name });
+      }
+      if (items.length === 0) {
+        for (const [id, name] of Object.entries(map)) {
+          if (!name) continue;
+          const lname = String(name).toLowerCase();
+          if (lname.indexOf(q) !== -1) items.push({ id, name });
+        }
+      }
+    } catch (e) { /* ignore */ }
+    showSuggestions(items.slice(0, 12));
+  });
+
+  // load legacy cache on startup
+  async function loadLegacyCompanies() {
+    try {
+      // first try the legacy cached file (secure dir)
+      const r = await fetch('/api/companies/legacy');
+      if (r.ok) {
+        const j = await r.json();
+        if (j && typeof j === 'object' && Object.keys(j).length > 0) {
+          window._legacy_companies_map = j; // {id: name}
+          return;
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    try {
+      // fallback: try the main companies cache (list form)
+      const r2 = await fetch('/api/companies');
+      if (r2.ok) {
+        const list = await r2.json();
+        if (Array.isArray(list) && list.length > 0) {
+          const map = {};
+          for (const it of list) {
+            try { map[String(it.id)] = it.name || ''; } catch(e){}
+          }
+          window._legacy_companies_map = map;
+          return;
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    // nothing available
+    window._legacy_companies_map = window._legacy_companies_map || {};
+  }
+
+  // load cache on startup
+  loadLegacyCompanies().then(()=> { evaluateStartButtonState(); });
+
+  if (companySearchBtn) {
+    companySearchBtn.addEventListener('click', async () => {
+      const q = document.getElementById('company_input').value || '';
+      companyResults.innerHTML = '<div class="muted">Buscando...</div>';
+      const list = await searchCompanies(q);
+      renderCompanyResults(list);
+    });
+  }
+
+  function showCacheEmptySuggestion(){
+    const container = document.getElementById('company_suggestions');
+    container.innerHTML = '';
+    const panel = document.createElement('div');
+    panel.style.position = 'absolute'; panel.style.background = 'white'; panel.style.border = '1px solid #e6e6ef'; panel.style.borderRadius = '6px'; panel.style.width = '100%'; panel.style.maxHeight = '220px'; panel.style.overflow = 'auto'; panel.style.zIndex = 9999; panel.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; panel.style.padding = '12px';
+    const p = document.createElement('div'); p.style.marginBottom = '8px'; p.textContent = 'Nenhum cache local de empresas encontrado.';
+    const btn = document.createElement('button'); btn.className = 'btn primary'; btn.textContent = 'Atualizar cache de empresas';
+    btn.addEventListener('click', () => {
+      try{ if (typeof refreshCompaniesBtn !== 'undefined' && refreshCompaniesBtn) { refreshCompaniesBtn.click(); } else { alert('Clique no botão Atualizar cache de empresas na tela.'); } }catch(e){ alert('Erro ao tentar atualizar: ' + e.message); }
+    });
+    panel.appendChild(p); panel.appendChild(btn); container.appendChild(panel);
+  }
+
+  // show/hide upload button when file selected
+  input.addEventListener('change', (ev) => {
+    if (input.files && input.files.length) {
+      uploadBtn.style.display = '';
+    } else {
+      uploadBtn.style.display = 'none';
+    }
+    // when selecting a new file, clear previous selection/preview
+    previewArea.innerHTML = '';
+    detectionArea.innerHTML = '';
+    selected_company_id = null; companySelectedDiv.style.display = 'none';
+    // hide company selection if no file is selected
+    try { if (!input.files || !input.files.length) document.getElementById('company_block').style.display = 'none'; } catch(e){}
+    evaluateStartButtonState();
+  });
+
+  // --- Confirmation modal ---
+  function showConfirmModal(summary, onConfirm, onCancel) {
+    // create modal elements
+    const overlay = document.createElement('div');
+    overlay.style.position='fixed'; overlay.style.left=0; overlay.style.top=0; overlay.style.right=0; overlay.style.bottom=0; overlay.style.background='rgba(0,0,0,0.4)'; overlay.style.display='flex'; overlay.style.alignItems='center'; overlay.style.justifyContent='center'; overlay.style.zIndex=99999;
+    const box = document.createElement('div'); box.style.background='white'; box.style.padding='18px'; box.style.borderRadius='10px'; box.style.width='min(760px,96%)'; box.style.boxShadow='0 12px 40px rgba(0,0,0,0.2)';
+    const h = document.createElement('h3'); h.textContent='Confirmar importação';
+    const p = document.createElement('div'); p.style.marginTop='8px'; p.innerHTML = '<div class="muted">Revise as informações abaixo antes de confirmar.</div>' + '<pre style="background:#f7f7f7;padding:8px;border-radius:6px;margin-top:8px;font-family:monospace">' + escapeHtml(summary) + '</pre>';
+    const btns = document.createElement('div'); btns.style.display='flex'; btns.style.gap='8px'; btns.style.marginTop='12px'; btns.style.justifyContent='flex-end';
+    const cancel = document.createElement('button'); cancel.className='btn ghost'; cancel.textContent='Cancelar';
+    const confirm = document.createElement('button'); confirm.className='btn primary'; confirm.textContent='Confirmar e iniciar';
+    cancel.addEventListener('click', () => { document.body.removeChild(overlay); if (onCancel) onCancel(); });
+    confirm.addEventListener('click', () => { document.body.removeChild(overlay); if (onConfirm) onConfirm(); });
+    btns.appendChild(cancel); btns.appendChild(confirm);
+    box.appendChild(h); box.appendChild(p); box.appendChild(btns); overlay.appendChild(box); document.body.appendChild(overlay);
+  }
+
+  // Refresh companies button (calls background job)
+  const refreshCompaniesBtn = document.getElementById('refresh_companies_btn');
+  if (refreshCompaniesBtn) {
+    refreshCompaniesBtn.addEventListener('click', async () => {
+      try {
+  logsEl.textContent = 'Iniciando atualização de empresas (usando credenciais da sessão)...\n';
+  const payload = { headless: true };
+  try{ const bs = localStorage.getItem('browser_session_id'); if(bs) payload.browser_session_id = bs; }catch(e){}
+        const r = await fetch('/api/companies/refresh', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        if (!r.ok) {
+          if(r.status === 400){ const txt = await r.text().catch(()=> 'Bad Request'); logsEl.textContent += 'Falha iniciar refresh: ' + txt + ' — certifique-se de ter feito login previamente.'; refreshCompaniesBtn.disabled = true; setTimeout(()=> refreshCompaniesBtn.disabled = false, 3000); return; }
+          logsEl.textContent += 'Falha iniciar refresh: ' + await r.text(); return; }
+        const j = await r.json(); const job_id = j.job_id || j.id || j.job && j.job.id;
+        logsEl.textContent += 'Refresh iniciado: ' + job_id + '\n';
+        const poll = async () => {
+          try {
+            const rl = await fetch('/api/companies/' + encodeURIComponent(job_id) + '/logs');
+            if (rl.ok) {
+              const lj = await rl.json();
+              if (lj && lj.logs) {
+                // render logs; make any snapshot lines clickable
+                const lines = lj.logs.map(l => {
+                  try {
+                    if (typeof l === 'string' && l.indexOf('page snapshot saved for debug:') !== -1) {
+                      const parts = l.split('page snapshot saved for debug:');
+                      const p = parts.length > 1 ? parts[1].trim() : null;
+                      if (p) return `<div><a href="/tmp_uploads/${encodeURIComponent(p.split('\\').pop())}" target="_blank">Snapshot: ${escapeHtml(p.split('\\').pop())}</a></div>`;
+                    }
+                  } catch(e){}
+                  return `<div>${escapeHtml(String(l))}</div>`;
+                }).join('');
+                logsEl.innerHTML = lines;
+                logsEl.scrollTop = logsEl.scrollHeight;
+              }
+            }
+            const rs = await fetch('/api/companies/' + encodeURIComponent(job_id) + '/status');
+            if (rs.ok) {
+              const sj = await rs.json();
+              if (sj && sj.status && sj.status.done) {
+                logsEl.textContent += '\nAtualização concluída.';
+                // refresh local map by fetching the latest companies cache
+                try {
+                  const cr = await fetch('/api/companies');
+                  if (cr.ok) {
+                    const list = await cr.json();
+                    const map = {};
+                    if (Array.isArray(list)) {
+                      for (const it of list) { try { map[String(it.id)] = it.name || ''; } catch(e){} }
+                    }
+                    window._companies_map = map;
+                    logsEl.textContent += '\nMapa de empresas atualizado (' + Object.keys(map).length + ' entradas)';
+                  }
+                } catch(e){ logsEl.textContent += '\nFalha atualizar mapa de empresas: ' + e.message; }
+                return;
+              }
+            }
+          } catch (e) { logsEl.textContent += '\nErro poll: ' + e.message; }
+          setTimeout(poll, 1200);
+        };
+        poll();
+      } catch (e) { logsEl.textContent += '\nErro iniciar refresh: ' + e.message; }
+    });
+  }
+
+  // evaluate start button state on load (and after upload)
+  window.addEventListener('load', () => { evaluateStartButtonState(); });
+  if (startBtn) {
+    // helper to reset the form to initial state after a completed import
+    function resetToInitial(){
+      try { previewArea.innerHTML = ''; } catch(e){}
+      try { detectionArea.innerHTML = ''; } catch(e){}
+      try { input.value = ''; } catch(e){}
+      try { window._last_upload_id = null; } catch(e){}
+      try { selected_company_id = null; companySelectedDiv.style.display = 'none'; } catch(e){}
+      try { document.getElementById('company_block').style.display = 'none'; } catch(e){}
+      try { startBtn.dataset.mode = 'normal'; startBtn.textContent = 'Iniciar importação'; startBtn.disabled = true; startBtn.classList.remove('primary'); startBtn.style.background = '#cfcfd6'; } catch(e){}
+      try { evaluateStartButtonState(); } catch(e){}
+    }
+
+    startBtn.addEventListener('click', async () => {
+      // if button is in reset mode, prepare UI for a new upload
+      if (startBtn.dataset.mode === 'reset') { resetToInitial(); return; }
+      const upload_id = window._last_upload_id;
+      if (!upload_id) { alert('Faça upload antes de iniciar'); return; }
+      // collect extra options and build a human readable summary
+      const company_name = document.getElementById('company_input')?.value || '';
+      const import_type = document.querySelector('input[name="import_type"]:checked')?.value || 'auto';
+            // execution always uses the existing browser session
+            const use_existing = true;
+            const headless = false; // headless flag not used by UI — session already exists
+            const minimized = false;
+      const summary = `Upload ID: ${upload_id}\nEmpresa: ${company_name || '(não especificado)'}\nEmpresa ID: ${selected_company_id || '(não selecionada)'}\nTipo: ${import_type}\nUsar sessão existente: ${use_existing ? 'sim' : 'não'}\nHeadless: ${headless ? 'sim' : 'não'}`;
+      // show confirmation modal and only proceed if user confirms
+      showConfirmModal(summary, async () => {
+        startBtn.disabled = true; startBtn.textContent = 'Iniciando...';
+        try {
+          const payload = { upload_id, company_name, headless, minimized };
+          payload.import_type = import_type;
+          payload.use_existing_session = use_existing;
+          // always include the stored browser session id
+          const sid = localStorage.getItem('browser_session_id');
+          if (sid) payload.browser_session_id = sid;
+          if (selected_company_id) payload.company_id = selected_company_id;
+          // verify session exists and is active before starting
+          if (!sid) { alert('Nenhuma sessão detectada. Faça login primeiro.'); startBtn.disabled = false; startBtn.textContent = 'Iniciar importação'; return; }
+          const sess = await checkBrowserSession(sid);
+          const onDashboard = sess && sess.url && String(sess.url).toLowerCase().indexOf('/moodashboard') !== -1;
+          if (!sess || !sess.active) { alert('Sessão do navegador não encontrada ou não ativa. Faça login novamente.'); startBtn.disabled = false; startBtn.textContent = 'Iniciar importação'; return; }
+
+          const r = await fetch('/api/import/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+          if (!r.ok) { alert('Falha iniciar: ' + await r.text()); startBtn.disabled = false; startBtn.textContent = 'Iniciar importação'; return; }
+          const j = await r.json(); const job_id = j.job_id;
+          // expose last job id globally to allow manual confirm action
+          window._last_job_id = job_id;
+          logsEl.textContent = '';
+        // poll logs and status
+        const poll = async () => {
+          try {
+                const rl = await fetch('/api/import/' + encodeURIComponent(job_id) + '/logs', { credentials: 'same-origin' });
+            if (rl.ok) { const lj = await rl.json(); if (lj && lj.logs) { logsEl.textContent = lj.logs.join('\n'); logsEl.scrollTop = logsEl.scrollHeight; } }
+            const rs = await fetch('/api/import/' + encodeURIComponent(job_id) + '/status', { credentials: 'same-origin' });
+            if (rs.ok) {
+              const sj = await rs.json();
+              try {
+                const awaiting = !!(sj && sj.status && sj.status.awaiting_confirmation);
+                const cb = document.getElementById('confirm_import_btn');
+                const cancelBtn = document.getElementById('cancel_import_btn');
+                if (awaiting) {
+                  // even if the job future is done, the import still requires operator confirmation
+                  if (cb) { cb.style.display = ''; }
+                  if (cancelBtn) { cancelBtn.style.display = ''; }
+                  // do not return here; continue polling so logs update
+                } else {
+                  if (cb) { cb.style.display = 'none'; }
+                  if (cancelBtn) { cancelBtn.style.display = 'none'; }
+                }
+                if (sj && sj.status && sj.status.done && !awaiting) {
+                  // job finished: allow user to send a new base
+                  startBtn.textContent = 'Enviar nova base';
+                  startBtn.disabled = false;
+                  startBtn.dataset.mode = 'reset';
+                  // hide confirm/cancel
+                  if (cb) { cb.style.display = 'none'; }
+                  if (cancelBtn) { cancelBtn.style.display = 'none'; }
+                  try { window._last_job_id = null; } catch(e){}
+                  logsEl.textContent += '\nConcluído. Clique em "Enviar nova base" para iniciar outro upload.';
+                  return;
+                }
+              } catch (e) { /* ignore */ }
+            }
+          } catch (e) { logsEl.textContent += '\nErro poll: ' + e.message; }
+          setTimeout(poll, 1000);
+        };
+        poll();
+        } catch (e) { alert('Erro: ' + e.message); startBtn.disabled = false; startBtn.textContent = 'Iniciar importação'; }
+      }, () => { /* user cancelled */ });
+    });
+  }
+
+  // confirm import button handler (click to send confirm request to server)
+  const confirmBtn = document.getElementById('confirm_import_btn');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', async () => {
+      if (!window._last_job_id) { alert('Nenhum job ativo para confirmar'); return; }
+      confirmBtn.disabled = true; confirmBtn.textContent = 'Confirmando...';
+      try {
+  const r = await fetch('/api/import/' + encodeURIComponent(window._last_job_id) + '/confirm', { method: 'POST', credentials: 'same-origin' });
+        if (!r.ok) { alert('Falha confirmar: ' + await r.text()); confirmBtn.disabled = false; confirmBtn.textContent = 'Confirmar importação'; return; }
+        const j = await r.json(); logsEl.textContent += '\nConfirm request sent. Server responded: ' + JSON.stringify(j);
+      } catch (e) { logsEl.textContent += '\nErro confirm: ' + e.message; }
+      finally { confirmBtn.disabled = false; confirmBtn.textContent = 'Confirmar importação'; }
+    });
+  }
+    </script>
+  </body>
+</html>

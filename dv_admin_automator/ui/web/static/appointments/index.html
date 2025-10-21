@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Appointments — DV Automator</title>
+    <style>
+      /* reuse simplified dashboard styles */
+      body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;margin:0;background:linear-gradient(135deg,#ff9ad1 0%,#7bd1ff 100%)}
+      .app-wrap{max-width:1200px;margin:24px auto;padding:16px;background:rgba(255,255,255,0.96);border-radius:12px}
+      .logo{width:40px;height:40px;border-radius:8px;background:linear-gradient(135deg,#ff4fa3,#2ea6ff);display:inline-flex;align-items:center;justify-content:center;color:white;font-weight:700}
+      .topbar{display:flex;justify-content:space-between;align-items:center}
+      .menu{display:flex;gap:8px}
+      .btn{padding:8px 12px;border-radius:8px;border:0;background:#2ea6ff;color:white;cursor:pointer}
+      .muted{color:#6b6b7a}
+    </style>
+  </head>
+  <body>
+    <div class="app-wrap">
+      <div class="topbar">
+        <div style="display:flex;gap:12px;align-items:center">
+          <div class="logo">DV</div>
+          <div style="font-weight:700">Appointments</div>
+        </div>
+        <div class="menu"><button class="btn" onclick="goBack()">← Voltar para Dashboard</button></div>
+      </div>
+
+      <div style="margin-top:18px">
+        <h2>Opções</h2>
+        <p class="muted">Clique em uma ação para abrir a página dedicada.</p>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn" onclick="window.location.href='agendar_ciclo.html'">Agendar Ciclo</button>
+          <button class="btn" onclick="window.location.href='criar_consulta_avulsa.html'">Criar Consulta Avulsa</button>
+          <button class="btn" onclick="window.location.href='historico.html'">Ver Histórico</button>
+        </div>
+      </div>
+    </div>
+    <script>function goBack(){ window.location.href='/static/dashboard.html'; }</script>
+  </body>
+</html>

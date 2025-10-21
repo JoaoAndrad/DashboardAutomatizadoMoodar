@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DV Admin Automator — Ativação</title>
+    <style>
+      :root{ --bg1: linear-gradient(135deg,#ff9ad1 0%,#7bd1ff 100%); --card-bg: rgba(255,255,255,0.95); --accent-pink:#ff4fa3; --accent-blue:#2ea6ff; --muted:#6b6b7a }
+      html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
+      body{display:flex;align-items:center;justify-content:center;background:var(--bg1);padding:2rem}
+      .card{width:100%;max-width:980px;background:var(--card-bg);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,0.12);overflow:hidden;display:grid;grid-template-columns:360px 1fr}
+      .sidebar{padding:28px;background:linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.8));}
+      .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent-pink),var(--accent-blue));display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
+      .lead{color:var(--muted);margin-top:8px;font-size:13px}
+      .btn{appearance:none;border:0;padding:12px 14px;border-radius:10px;font-weight:600;color:white;cursor:pointer}
+      .btn.primary{background:linear-gradient(90deg,var(--accent-pink),var(--accent-blue))}
+      .btn.ghost{background:transparent;border:1px solid rgba(0,0,0,0.06);color:#333}
+      label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+      input{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="sidebar">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="logo">DV</div>
+          <div>
+            <div style="font-weight:700">Fluxo de Ativação</div>
+            <div class="lead">Solicite ativação e baixe credenciais após aprovação.</div>
+          </div>
+        </div>
+
+        <div style="margin-top:18px">
+          <label>E-mail do operador</label>
+          <input id="contact" type="email" placeholder="ops@example.com" />
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button id="request_activation" class="btn primary">Solicitar ativação</button>
+            <button id="reset_flow" class="btn ghost">Resetar</button>
+          </div>
+
+          <div id="request_info" style="margin-top:12px;color:var(--muted);font-size:13px"></div>
+
+          <hr style="margin-top:14px;border:none;border-top:1px solid rgba(0,0,0,0.04)" />
+
+          <label style="margin-top:6px">Código de ativação</label>
+          <input id="code" type="text" placeholder="12345678" />
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="confirm_code" class="btn primary">Confirmar</button>
+            <button id="back_to_wait" class="btn ghost">Voltar</button>
+          </div>
+
+          <label style="margin-top:12px">Chave mestre</label>
+          <input id="master_password" type="password" placeholder="••••••••" />
+          <div style="margin-top:10px">
+            <button id="activate" class="btn primary">Ativar e baixar credenciais</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="main" style="padding:28px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="font-weight:700">Ativação — Console</div>
+          <div style="margin-left:auto;color:var(--muted)">Status: aguardando</div>
+        </div>
+
+        <pre id="output" style="margin-top:12px;height:420px;background:rgba(0,0,0,0.03);padding:12px;border-radius:8px;overflow:auto"></pre>
+      </div>
+    </div>
+
+    <script>
+      const out = document.getElementById('output');
+      function log(m){ out.textContent += new Date().toLocaleTimeString() + ' ' + m + '\n'; out.scrollTop = out.scrollHeight; }
+
+      async function postJson(path, body){ const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)}); return r; }
+
+      document.getElementById('request_activation').addEventListener('click', async ()=>{
+        const contact = document.getElementById('contact').value.trim(); if(!contact){ log('E-mail obrigatório'); return; }
+        log('Enviando request_activation...');
+        try{
+          const r = await postJson('/api/request_activation', {contact});
+          const t = await r.text(); log('Response: ' + t); if(r.ok){ const j = JSON.parse(t); document.getElementById('request_info').textContent = JSON.stringify(j.response || j); }
+        }catch(e){ log('Erro: ' + e.message); }
+      });
+
+      document.getElementById('confirm_code').addEventListener('click', async ()=>{
+        const code = document.getElementById('code').value.trim(); if(!code){ log('Código obrigatório'); return; }
+        log('Confirmando código...');
+        try{ const r = await postJson('/api/confirm_code', {code}); const t = await r.text(); log('Response: ' + t); if(r.ok){ log('Código aceito'); } }catch(e){ log('Erro: ' + e.message); }
+      });
+
+      document.getElementById('activate').addEventListener('click', async ()=>{
+        const code = document.getElementById('code').value.trim(); const pw = document.getElementById('master_password').value; if(!code||!pw){ log('Código e chave mestre obrigatórios'); return; }
+        log('Enviando activate...');
+        try{ const r = await postJson('/api/activate', {code, master_password: pw}); const t = await r.text(); log('Response: ' + t); if(r.ok){ log('Ativação completa'); } }catch(e){ log('Erro: ' + e.message); }
+      });
+
+      document.getElementById('reset_flow').addEventListener('click', ()=>{ document.getElementById('contact').value=''; document.getElementById('code').value=''; document.getElementById('master_password').value=''; document.getElementById('request_info').textContent=''; log('Fluxo resetado'); });
+    </script>
+  </body>
+</html>

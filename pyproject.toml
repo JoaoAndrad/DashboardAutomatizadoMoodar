@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dv-admin-automator"
+version = "0.0.0"
+description = "Automation tools for Django Admin using Selenium"
+authors = [
+  {name = "JoaoAndrad"}
+]
+dependencies = [
+  "selenium>=4.10",
+  "chromedriver-autoinstaller>=0.4",
+  "typer[all]>=0.10",
+  "pydantic>=1.10",
+  "PyYAML>=6.0",
+  "loguru>=0.7",
+  "rich>=13.0",
+  "tenacity>=8.0"
+]

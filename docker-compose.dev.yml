@@ -1,0 +1,27 @@
+version: '3.8'
+services:
+  app:
+    # If you prefer to use a published image instead of building locally,
+    # uncomment the following line and replace with your image name.
+    # image: yourdockerhubuser/moodar-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./:/app:delegated
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      # When running locally with compose we provide a Selenium service
+      # The BrowserManager will connect to this if SELENIUM_REMOTE_URL is set.
+      - SELENIUM_REMOTE_URL=http://selenium:4444/wd/hub
+    stdin_open: true
+    tty: true
+  selenium:
+    image: selenium/standalone-chrome:115.0
+    shm_size: 2gb
+    ports:
+      - "4444:4444"
+    volumes:
+      - /dev/shm:/dev/shm

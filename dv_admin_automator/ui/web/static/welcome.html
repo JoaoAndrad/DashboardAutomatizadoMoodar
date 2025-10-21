@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DV Admin Automator — Welcome</title>
+    <style>
+      :root{ --bg1: linear-gradient(135deg,#ff9ad1 0%,#7bd1ff 100%); --card-bg: rgba(255,255,255,0.95); --accent-pink:#ff4fa3; --accent-blue:#2ea6ff; --muted:#6b6b7a }
+      html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
+      body{display:flex;align-items:center;justify-content:center;background:var(--bg1);padding:2rem}
+      .card{width:100%;max-width:900px;background:var(--card-bg);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,0.12);overflow:hidden;display:flex}
+      .left{flex:0 0 320px;padding:28px;background:linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.8));}
+      .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent-pink),var(--accent-blue));display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:20px}
+      .title{margin-top:12px;font-size:20px;font-weight:700}
+      .lead{color:var(--muted);margin-top:8px;font-size:13px}
+      .right{flex:1;padding:28px}
+      .btn{appearance:none;border:0;padding:12px 14px;border-radius:10px;font-weight:600;color:white;cursor:pointer}
+      .btn.primary{background:linear-gradient(90deg,var(--accent-pink),var(--accent-blue))}
+      .btn.ghost{background:transparent;border:1px solid rgba(0,0,0,0.06);color:#333}
+      .form{margin-top:18px;max-width:420px}
+      label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+      input{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)}
+      .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.6);border-top-color:rgba(255,255,255,0.95);border-radius:50%;animation:spin 1s linear infinite;vertical-align:middle;margin-left:8px}
+      @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="left">
+        <div class="logo">DV</div>
+        <div class="title">Automação Dashboard Moodar</div>
+        <div class="lead">Protótipo para ativação segura e automação do Django Admin.</div>
+        <div style="margin-top:18px;font-size:13px;color:var(--muted)">Use uma conta de operador para solicitar ativação. Em desenvolvimento use o servidor local.</div>
+      </div>
+      <div class="right">
+        <h2>Bem-vindo</h2>
+        <div class="form">
+          <label for="username">Nome de usuário / e-mail</label>
+          <input id="username" type="text" placeholder="usuario@example.com" />
+          <label for="password" style="margin-top:10px">Senha</label>
+          <input id="password" type="password" placeholder="sua senha" />
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button id="login" class="btn primary" aria-busy="false">Entrar <span id="login_spinner" style="display:none" class="spinner"></span></button>
+            <a href="/static/activation.html"><button class="btn ghost">Ir para Ativação</button></a>
+          </div>
+          <div id="msg" style="margin-top:12px;color:var(--muted);font-size:13px"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById('login').addEventListener('click', async ()=>{
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        const msg = document.getElementById('msg');
+        const loginBtn = document.getElementById('login');
+        const spinner = document.getElementById('login_spinner');
+        if(!username || !password){ msg.textContent = 'Usuário e senha são obrigatórios'; return; }
+        // disable button and show spinner
+        loginBtn.disabled = true; loginBtn.setAttribute('aria-busy','true'); spinner.style.display = 'inline-block';
+        msg.textContent = 'Iniciando sessão...';
+        try{
+          // Request a visible browser session (headless:false) so the second browser is shown
+          const payload = { username, password, headless: false };
+          const resp = await fetch('/api/login', {method:'POST', credentials: 'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+          if(!resp.ok){ msg.textContent = 'Falha ao iniciar browser: ' + await resp.text(); return; }
+          const j = await resp.json();
+          if(j && j.job_id){
+            // persist last job so dashboard can pick it up
+            try{ localStorage.setItem('last_login_job', j.job_id); }catch(e){}
+            // persist browser_session_id if server provided it so dashboard can detect active session
+            try{ if(j.browser_session_id) localStorage.setItem('browser_session_id', j.browser_session_id); }catch(e){}
+            msg.textContent = 'Login agendado (job: ' + j.job_id + '). Aguardando conclusão...';
+            // poll job status until it finishes or errors
+            const start = Date.now();
+            const timeoutMs = 30_000; // 30s max
+            async function poll(delay = 700){
+              try{
+                const r2 = await fetch('/api/jobs/' + encodeURIComponent(j.job_id), { credentials: 'same-origin' });
+                if(r2.status === 404){ msg.textContent = 'Job não encontrado'; return; }
+                const s = await r2.json();
+                    if(s && s.ok && s.status){
+                      if(s.status.done){
+                        msg.textContent = 'Login finalizado. Finalizando sessão...';
+                        // finalize the pending login on the server so the HTTP
+                        // session is written only when the Django login actually
+                        // succeeded. Call /api/login/complete with the job id.
+                        try{
+                          const fin = await fetch('/api/login/complete', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ job_id: j.job_id }) });
+                          if(!fin.ok){
+                            const txt = await fin.text().catch(()=> 'failed');
+                            msg.textContent = 'Falha ao finalizar sessão: ' + txt; return;
+                          }
+                          // clear stored job id and redirect to dashboard once the
+                          // server-side session or fallback cookie is visible to the
+                          // browser. Polling /api/session ensures the cookie/session
+                          // has been written before navigation, avoiding a stale
+                          // welcome page that requires manual refresh.
+                          try{ localStorage.removeItem('last_login_job'); }catch(e){}
+                          msg.textContent = 'Finalizando sessão e abrindo dashboard...';
+                          const redirectStart = Date.now();
+                          const redirectTimeout = 10000; // ms (increase to 10s)
+                          async function waitForSessionAndRedirect(){
+                            while(Date.now() - redirectStart < redirectTimeout){
+                              try{
+                                const sresp = await fetch('/api/session', { credentials: 'same-origin' });
+                                if(sresp.ok){
+                                  const sj = await sresp.json().catch(()=>null);
+                                  if(sj){
+                                    console.log('session poll response', sj);
+                                    if((sj.session && sj.session.moodar_username) || (sj.cookies && sj.cookies.moodar_logged_in)){
+                                      console.log('Detected session/cookie, redirecting to dashboard');
+                                      window.location.href = '/static/dashboard.html';
+                                      return;
+                                    }
+                                  }
+                                }
+                              }catch(e){ /* ignore and retry */ }
+                              await new Promise(r => setTimeout(r, 300));
+                            }
+                            // fallback: redirect anyway, adding a cache-busting query
+                            // parameter to force a fresh navigation which should include
+                            // any cookies set by the server.
+                            console.log('Session poll timed out; redirecting to dashboard with cache-bust');
+                            window.location.href = '/static/dashboard.html?login=' + Date.now();
+                          }
+                          waitForSessionAndRedirect();
+                          return;
+                        }catch(e){ msg.textContent = 'Erro finalizando sessão: ' + e.message; return; }
+                      }
+                      if(s.status.exception){
+                        msg.textContent = 'Job falhou: ' + s.status.exception; return; }
+                    }
+              }catch(e){ msg.textContent = 'Erro ao checar job: ' + e.message; }
+              if(Date.now() - start > timeoutMs){ msg.textContent = 'Tempo esgotado esperando o login'; return; }
+              setTimeout(()=> poll(Math.min(3000, delay*1.5)), delay);
+            }
+            poll();
+          }else{
+            msg.textContent = 'Login iniciado — abrindo Dashboard';
+            setTimeout(()=>{ location.href = '/static/dashboard.html'; }, 900);
+          }
+        }catch(e){ msg.textContent = 'Erro: ' + e.message }
+        finally{ loginBtn.disabled = false; loginBtn.setAttribute('aria-busy','false'); spinner.style.display = 'none'; }
+      });
+    </script>
+  </body>
+</html>
