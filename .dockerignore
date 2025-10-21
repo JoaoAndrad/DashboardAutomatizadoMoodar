@@ -1,3 +1,31 @@
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Local env and secrets
+.env
+credentials.json
+
+# Build artifacts
+build/
+*.egg-info/
+dist/
+
+# Tests and helpers not needed in image
+testes/
+tests/
+
+# Editor and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+Thumbs.db
+desktop.ini
+
+# Docker context exclusions
+docker-context/
+*.tar
 __pycache__/
 .venv/
 *.pyc

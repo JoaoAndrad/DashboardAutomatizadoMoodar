@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Virtualenv
+venv/
+env/
+
+# Pyenv
+.python-version
+
+# Installer logs
+pip-log.txt
+
+# VSCode
+.vscode/
+
+# OS files
+Thumbs.db
+desktop.ini
+
+# Docker context
+docker-context/
