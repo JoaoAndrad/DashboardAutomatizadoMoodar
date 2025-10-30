@@ -1,6 +1,7 @@
 from pathlib import Path 
 import json 
 import os 
+import shutil
 from typing import Optional 
 import warnings 
 try :
@@ -43,10 +44,28 @@ class LocalStore :
             pass 
     def save_credential (self ,name :str ,token :str ,salt_b64 :Optional [str ]=None ):
         self .ensure_dirs ()
-        p =self .creds_dir /name 
-        p .write_text (token ,encoding ="utf-8")
+        # Clear any existing credentials in the creds_dir before saving the new one.
+        # This ensures that after a new activation only the freshly received
+        # credential files are present.
+        try:
+            for child in self.creds_dir.iterdir():
+                # remove files and dirs recursively
+                if child.is_dir():
+                    shutil.rmtree(child)
+                else:
+                    try:
+                        child.unlink()
+                    except Exception:
+                        # best-effort: ignore errors removing individual files
+                        pass
+        except FileNotFoundError:
+            # creds_dir may not exist yet; ensure_dirs() created it above
+            pass
+
+        p = self.creds_dir / name
+        p.write_text(token, encoding="utf-8")
         if salt_b64 is not None :
-            (self .creds_dir /(name +".salt")).write_text (salt_b64 ,encoding ="utf-8")
+            (self.creds_dir / (name + ".salt")).write_text(salt_b64, encoding="utf-8")
         return p 
     def load_state (self )->dict :
         if not self .state_file .exists ():

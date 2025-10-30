@@ -8,10 +8,9 @@ import urllib.error
 import os
 import signal
 import re
-import sys
-import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
+# venv lives inside the project root (ROOT/.venv)
 if sys.platform.startswith("win"):
     VENV_PY = ROOT / ".venv" / "Scripts" / "python.exe"
 else:
@@ -21,8 +20,9 @@ URL = "http://127.0.0.1:8000/"
 
 
 def ensure_venv():
+    # Create venv inside the project root if missing
     if not VENV_PY.exists():
-        print("Creating virtual environment...")
+        print("Creating virtual environment in project (ROOT/.venv) ...")
         try:
             subprocess.check_call([sys.executable, "-m", "venv", str(ROOT / ".venv")])
         except subprocess.CalledProcessError as exc:
@@ -46,7 +46,15 @@ def ensure_venv():
 def install_requirements():
     req = ROOT / "requirements.txt"
     if req.exists():
-        print("Installing requirements...")
+        print("Installing requirements (if needed)...")
+        try:
+            if requirements_satisfied(req):
+                print("Requirements already satisfied in venv; skipping installation.")
+                return
+        except Exception:
+            # fall back to installing if the check fails
+            pass
+
         try:
             subprocess.check_call([str(VENV_PY), "-m", "pip", "install", "--upgrade", "pip"])
             subprocess.check_call([str(VENV_PY), "-m", "pip", "install", "-r", str(req)])
@@ -58,6 +66,59 @@ def install_requirements():
             print(" - If SSL errors occur, try upgrading certifi in the venv: ")
             print(f"   {str(VENV_PY)} -m pip install --upgrade certifi")
             raise
+
+
+def parse_requirements_file(req_path: Path):
+    reqs = []
+    if not req_path.exists():
+        return reqs
+    with req_path.open("r", encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "#" in line:
+                line = line.split("#", 1)[0].strip()
+            m = re.match(r"^([A-Za-z0-9_.+-]+)\s*([<>=!~]+)\s*([0-9a-zA-Z.+-]+)$", line)
+            if m:
+                name, op, ver = m.group(1), m.group(2), m.group(3)
+                reqs.append((name, op, ver))
+            else:
+                bare = line.split()[0]
+                reqs.append((bare, "", ""))
+    return reqs
+
+
+def get_installed_packages():
+    try:
+        out = subprocess.check_output([str(VENV_PY), "-m", "pip", "freeze"], universal_newlines=True)
+    except Exception:
+        return {}
+    inst = {}
+    for line in out.splitlines():
+        if "==" in line:
+            parts = line.split("==", 1)
+            inst[parts[0].lower()] = parts[1]
+    return inst
+
+
+def requirements_satisfied(req_path: Path) -> bool:
+    reqs = parse_requirements_file(req_path)
+    if not reqs:
+        return True
+    installed = get_installed_packages()
+    for name, op, ver in reqs:
+        key = name.lower()
+        if not op:
+            return False
+        if op == "==":
+            if key not in installed:
+                return False
+            if installed[key] != ver:
+                return False
+        else:
+            return False
+    return True
 
 
 def wait_for_server(url=URL, timeout=10.0, interval=0.5):
@@ -72,14 +133,69 @@ def wait_for_server(url=URL, timeout=10.0, interval=0.5):
 
 
 def open_browser():
+    """Open the UI URL using Google Chrome only. If Chrome is running, open a new tab
+    in the existing Chrome process. If Chrome is not found, print a message and
+    fall back to webbrowser.open_new_tab as a last resort.
+    """
     try:
         ready = wait_for_server()
         if not ready:
             print(f"Server did not respond within timeout; opening browser anyway: {URL}")
+
+        # Prefer Google Chrome specifically
+        chrome_cmd = find_chrome_command()
+        if chrome_cmd:
+            try:
+                # If chrome_cmd contains space (like 'py -3' equivalent), split
+                parts = chrome_cmd.split()
+                # Launch Chrome to open URL (this will open a new tab in existing instance)
+                subprocess.Popen(parts + [URL], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                print(f"Opened {URL} in Google Chrome")
+                return
+            except Exception as e:
+                print("Failed to launch Chrome directly:", e)
+
+        # Fallback to default browser if Chrome not available
         webbrowser.open_new_tab(URL)
         print(f"Opened {URL} in default browser (new tab requested)")
     except Exception as e:
         print("Failed to open browser:", e)
+
+
+def find_chrome_command():
+    """Return a best-effort command name for Google Chrome on this platform, or
+    None if not found. Examples returned: 'chrome' (Windows), 'google-chrome'
+    (Linux), 'open -a "Google Chrome"' (macOS handled separately by returning
+    '/usr/bin/open').
+    """
+    if sys.platform.startswith("win"):
+        # On Windows, 'chrome' should be on PATH when Chrome is installed in default location
+        # Use 'where' to detect presence
+        try:
+            subprocess.check_call(["where", "chrome"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return "chrome"
+        except Exception:
+            return None
+    elif sys.platform.startswith("darwin"):
+        # macOS: use 'open -a "Google Chrome" <url>'
+        # We'll return '/usr/bin/open' and caller will append ['-a', 'Google Chrome', URL]
+        try:
+            # check if Chrome app exists
+            chrome_path = "/Applications/Google Chrome.app"
+            if os.path.exists(chrome_path):
+                return "/usr/bin/open -a 'Google Chrome'"
+        except Exception:
+            return None
+        return None
+    else:
+        # Linux: common binary names
+        for name in ("google-chrome", "chrome", "chromium", "chromium-browser"):
+            try:
+                subprocess.check_call(["which", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return name
+            except Exception:
+                continue
+        return None
 
 
 def start_uvicorn():
@@ -98,110 +214,22 @@ def start_uvicorn():
         env_file,
     ]
     print("Starting uvicorn:", " ".join(cmd))
+    # Before starting, find and terminate any processes listening on port 8000
+    try:
+        pids = find_pids_listening_on_port(8000)
+        if pids:
+            print(f"Found processes listening on port 8000: {pids}. Terminating...")
+            terminate_pids(pids, force=True)
+            time.sleep(0.5)
+    except Exception:
+        pass
+
     proc = subprocess.Popen(cmd, cwd=str(ROOT))
     try:
         proc.wait()
     except KeyboardInterrupt:
         proc.terminate()
         proc.wait()
-
-
-def find_pids_listening_on_port(port=8000):
-    """Return a set of PIDs listening on the given TCP port on localhost.
-    Uses platform tools: on Windows parses netstat -ano; on Unix tries lsof/ss/netstat.
-    """
-    pids = set()
-    port_str = str(port)
-    if sys.platform.startswith("win"):
-        try:
-            out = subprocess.check_output(["netstat", "-ano"], universal_newlines=True, stderr=subprocess.DEVNULL)
-        except Exception:
-            return pids
-        for line in out.splitlines():
-            if f":{port_str} " in line or f":{port_str}\t" in line or f":{port_str}\r" in line:
-                parts = re.split(r"\s+", line.strip())
-                if len(parts) >= 5:
-                    pid = parts[-1]
-                    state = parts[3] if len(parts) >= 4 else ""
-                    # Look for LISTENING or any TCP row
-                    try:
-                        pids.add(int(pid))
-                    except Exception:
-                        continue
-        return pids
-    else:
-        # Try lsof first
-        try:
-            out = subprocess.check_output(["lsof", "-nP", f"-iTCP:{port_str}", "-sTCP:LISTEN"], universal_newlines=True, stderr=subprocess.DEVNULL)
-            for line in out.splitlines()[1:]:
-                parts = re.split(r"\s+", line.strip())
-                if len(parts) >= 2:
-                    try:
-                        pids.add(int(parts[1]))
-                    except Exception:
-                        continue
-            return pids
-        except Exception:
-            pass
-
-        # Try ss
-        try:
-            out = subprocess.check_output(["ss", "-ltnp"], universal_newlines=True, stderr=subprocess.DEVNULL)
-            for line in out.splitlines():
-                if f":{port_str} " in line or f":{port_str}\n" in line or f":{port_str}:" in line:
-                    # look for pid=NUM or users:("prog",pid,
-                    m = re.search(r"pid=(\d+)", line)
-                    if m:
-                        try:
-                            pids.add(int(m.group(1)))
-                        except Exception:
-                            pass
-            if pids:
-                return pids
-        except Exception:
-            pass
-
-        # Last resort: netstat parsing on Unix
-        try:
-            out = subprocess.check_output(["netstat", "-ltnp"], universal_newlines=True, stderr=subprocess.DEVNULL)
-            for line in out.splitlines():
-                if f":{port_str} " in line:
-                    parts = re.split(r"\s+", line.strip())
-                    if len(parts) >= 7:
-                        pidprog = parts[6]
-                        if "/" in pidprog:
-                            pid = pidprog.split("/")[0]
-                            try:
-                                pids.add(int(pid))
-                            except Exception:
-                                pass
-            return pids
-        except Exception:
-            return pids
-
-
-def terminate_pids(pids, force=False):
-    """Attempt to terminate the provided PIDs. On Unix try SIGTERM then SIGKILL if needed.
-    On Windows use taskkill /PID <pid> /F when force True or /PID <pid> otherwise.
-    """
-    if not pids:
-        return
-    for pid in list(pids):
-        try:
-            if sys.platform.startswith("win"):
-                cmd = ["taskkill", "/PID", str(pid)]
-                if force:
-                    cmd.append("/F")
-                subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            else:
-                try:
-                    os.kill(pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    continue
-        except Exception as e:
-            # Best effort; continue attempting to kill other PIDs
-            print(f"Failed to terminate PID {pid}: {e}")
-
 
 
 def main():
