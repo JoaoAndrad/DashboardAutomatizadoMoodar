@@ -316,11 +316,15 @@ func ensureResidentLauncher() {
 // executes and reports major version 3. It checks (in order):
 // - on Windows: "py -3", "python", "python3"
 // - on other OS: "python3", "python"
-func findPython3Command() (string, error) {
+// findPython3Command probes common python commands and returns a command slice
+// suitable for exec.Command (program and args). Example returns: {"py","-3"} or {"python3"}.
+func findPython3Command() ([]string, error) {
     // helper to test a command and args
-    test := func(cmd string, args ...string) bool {
-        c := exec.Command(cmd, append(args, "-c", "import sys;print(sys.version_info[0])")...)
-        out, err := c.Output()
+    test := func(cand []string) bool {
+        prog := cand[0]
+        args := append(cand[1:], "-c", "import sys;print(sys.version_info[0])")
+        cmd := exec.Command(prog, args...)
+        out, err := cmd.Output()
         if err != nil {
             return false
         }
@@ -335,24 +339,11 @@ func findPython3Command() (string, error) {
         candidates = [][]string{{"python3"}, {"python"}}
     }
     for _, cand := range candidates {
-        cmd := cand[0]
-        args := cand[1:]
-        if test(cmd, args...) {
-            // return the command as a single string; exec.Command expects first arg as program
-            // We only return program name here since we call exec.Command(pyCmd, "scripts/start_server.py").
-            // For 'py -3' case we need to return 'py' and include '-3' as env? Simpler: build wrapper when needed
-            if len(args) > 0 {
-                // special-case 'py -3' and return a small wrapper using cmd with args baked into an executable path
-                // but exec.Command doesn't accept a multi-word program. We'll return the program and manage args below.
-                // We'll return the program name but the caller will need to handle additional args — to keep it simple,
-                // we instead prefer commands without extra args when possible. If 'py -3' is the only match, we return
-                // a compound form 'py -3' and handle splitting when calling exec.Command.
-                return cmd + " " + strings.Join(args, " "), nil
-            }
-            return cmd, nil
+        if test(cand) {
+            return cand, nil
         }
     }
-    return "", fmt.Errorf("no python3 found in PATH (tried common names)")
+    return nil, fmt.Errorf("no python3 found in PATH (tried common names)")
 }
 
 func main() {
@@ -494,13 +485,27 @@ func main() {
     }
 
     fmt.Printf("Update applied. Starting project using scripts/start_server.py\n")
-    // Choose a Python 3 interpreter to run the start script to avoid syntax errors
-    pyCmd, err := findPython3Command()
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "no suitable Python 3 interpreter found: %v\n", err)
-        os.Exit(1)
+    // Prefer to use the project's venv python if present (project/.venv)
+    var pythonCmd []string
+    venvPy := filepath.Join(*project, ".venv")
+    if os.PathSeparator == '\\' {
+        venvPy = filepath.Join(*project, ".venv", "Scripts", "python.exe")
+    } else {
+        venvPy = filepath.Join(*project, ".venv", "bin", "python")
     }
-    cmd := exec.Command(pyCmd, "scripts/start_server.py")
+    if pathExists(venvPy) {
+        pythonCmd = []string{venvPy}
+    } else {
+        pc, err := findPython3Command()
+        if err != nil {
+            fmt.Fprintf(os.Stderr, "no suitable Python 3 interpreter found: %v\n", err)
+            os.Exit(1)
+        }
+        pythonCmd = pc
+    }
+
+    // Build exec.Command safely with program and args
+    cmd := exec.Command(pythonCmd[0], append(pythonCmd[1:], "scripts/start_server.py")...)
     // Ensure the start script runs with the project folder as working directory
     cmd.Dir = *project
     cmd.Stdout = os.Stdout
