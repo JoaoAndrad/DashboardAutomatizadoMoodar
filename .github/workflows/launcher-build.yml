@@ -37,7 +37,13 @@ jobs:
           else
             GO_EXT=
           fi
-          go build -ldflags "-s -w" -o dist/${GOOS}-${GOARCH}/moodar-launcher${GO_EXT} ./launcher
+          # Build from inside the launcher module so `go.mod` is found
+          pushd launcher
+          echo "Ensuring Go modules are downloaded (creates go.sum if needed)"
+          go mod tidy
+          go mod download
+          GOOS=${GOOS} GOARCH=${GOARCH} go build -ldflags "-s -w" -o ../dist/${GOOS}-${GOARCH}/moodar-launcher${GO_EXT} .
+          popd
 
       - name: Package artifact
         run: |
