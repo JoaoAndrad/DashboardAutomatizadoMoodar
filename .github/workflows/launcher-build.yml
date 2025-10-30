@@ -1,4 +1,5 @@
 name: Build launcher and publish release
+
 permissions:
   contents: write
 
@@ -14,6 +15,7 @@ jobs:
       matrix:
         goos: [linux, windows, darwin]
         goarch: [amd64]
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,60 +27,68 @@ jobs:
         with:
           go-version: "1.20"
 
-      - name: Prepare dist dir
+      - name: Prepare dist directory
         run: mkdir -p dist/${{ matrix.goos }}-${{ matrix.goarch }}
 
-      - name: Build
+      - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          echo "Building for $GOOS/$GOARCH"
-          # Build from inside the launcher module so `go.mod` is found
+          echo "🏗️ Building for $GOOS/$GOARCH"
           pushd launcher
-          echo "Ensuring Go modules are downloaded (creates go.sum if needed)"
+
+          echo "Ensuring Go modules are ready..."
           go mod tidy
           go mod download
-          # Decide target binary name so long lines don't get wrapped by runners
+
           if [ "$GOOS" = "windows" ]; then
             TARGET_NAME="moodar-launcher.exe"
           else
             TARGET_NAME="moodar-launcher"
           fi
-          GOOS=${GOOS} GOARCH=${GOARCH} go build -ldflags "-s -w" -o ../dist/${GOOS}-${GOARCH}/${TARGET_NAME} .
+
+          echo "Compiling binary: $TARGET_NAME"
+          GOOS=$GOOS GOARCH=$GOARCH go build -ldflags "-s -w" -o ../dist/${GOOS}-${GOARCH}/${TARGET_NAME} .
           popd
 
       - name: Package artifact
         run: |
           pushd dist/${{ matrix.goos }}-${{ matrix.goarch }}
-          # If an icon exists in the launcher folder, copy it into the dist dir so it ends up in the zip
-          if [ -f ../../launcher/icon.ico ]; then
-            cp ../../launcher/icon.ico . || true
+
+          # Copy icon if available
+          ICON_SRC="../../launcher/icon.ico"
+          if [ -f "$ICON_SRC" ]; then
+            cp "$ICON_SRC" . || true
           fi
-          # Use the built target filename (avoid long wrapped commands)
+
           if [ "${{ matrix.goos }}" = "windows" ]; then
             BIN_NAME="moodar-launcher.exe"
           else
             BIN_NAME="moodar-launcher"
           fi
-          # Create zip and sha256
+
+          ZIP_NAME="moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip"
+
           if [ -f icon.ico ]; then
-            zip -r moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip "${BIN_NAME}" icon.ico || zip -r moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip "${BIN_NAME}"
+            zip -r "$ZIP_NAME" "$BIN_NAME" icon.ico || zip -r "$ZIP_NAME" "$BIN_NAME"
           else
-            zip -r moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip "${BIN_NAME}"
+            zip -r "$ZIP_NAME" "$BIN_NAME"
           fi
-          sha256sum moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip > moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip.sha256
+
+          sha256sum "$ZIP_NAME" > "${ZIP_NAME}.sha256"
           popd
 
-      - name: Upload build artifact (per-matrix)
+      - name: Upload artifact (per platform)
         uses: actions/upload-artifact@v4
         with:
           name: moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/${{ matrix.goos }}-${{ matrix.goarch }}/*.zip
+          path: dist/${{ matrix.goos }}-${{ matrix.goarch }}/*.zip*
 
   release:
     needs: build
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -88,9 +98,9 @@ jobs:
         with:
           path: artifacts
 
-      - name: Debug: list downloaded artifacts
+      - name: Debug artifacts
         run: |
-          echo "Listing artifacts folder contents for debug"
+          echo "📂 Listing artifacts for debug:"
           ls -la artifacts || true
           find artifacts -maxdepth 3 -type f -print || true
 
@@ -98,11 +108,19 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          # create a project zip excluding venv, caches and large caches
-          zip -r project-${TAG}.zip . -x .git/** -x .venv/** -x venv/** -x tmp* -x companies_cache_*.json -x "**/__pycache__/**" -x "**/*.pyc"
-          sha256sum project-${TAG}.zip > project-${TAG}.zip.sha256
+          PROJECT_ZIP="project-${TAG}.zip"
+          echo "📦 Creating $PROJECT_ZIP"
+          zip -r "$PROJECT_ZIP" . \
+            -x ".git/**" \
+            -x ".venv/**" \
+            -x "venv/**" \
+            -x "tmp*" \
+            -x "companies_cache_*.json" \
+            -x "**/__pycache__/**" \
+            -x "**/*.pyc"
+          sha256sum "$PROJECT_ZIP" > "${PROJECT_ZIP}.sha256"
 
-      - name: Upload release assets
+      - name: Publish release
         uses: softprops/action-gh-release@v1
         with:
           files: |
