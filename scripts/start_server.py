@@ -5,6 +5,11 @@ from pathlib import Path
 import webbrowser
 import urllib.request
 import urllib.error
+import os
+import signal
+import re
+import sys
+import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 if sys.platform.startswith("win"):
@@ -99,6 +104,104 @@ def start_uvicorn():
     except KeyboardInterrupt:
         proc.terminate()
         proc.wait()
+
+
+def find_pids_listening_on_port(port=8000):
+    """Return a set of PIDs listening on the given TCP port on localhost.
+    Uses platform tools: on Windows parses netstat -ano; on Unix tries lsof/ss/netstat.
+    """
+    pids = set()
+    port_str = str(port)
+    if sys.platform.startswith("win"):
+        try:
+            out = subprocess.check_output(["netstat", "-ano"], universal_newlines=True, stderr=subprocess.DEVNULL)
+        except Exception:
+            return pids
+        for line in out.splitlines():
+            if f":{port_str} " in line or f":{port_str}\t" in line or f":{port_str}\r" in line:
+                parts = re.split(r"\s+", line.strip())
+                if len(parts) >= 5:
+                    pid = parts[-1]
+                    state = parts[3] if len(parts) >= 4 else ""
+                    # Look for LISTENING or any TCP row
+                    try:
+                        pids.add(int(pid))
+                    except Exception:
+                        continue
+        return pids
+    else:
+        # Try lsof first
+        try:
+            out = subprocess.check_output(["lsof", "-nP", f"-iTCP:{port_str}", "-sTCP:LISTEN"], universal_newlines=True, stderr=subprocess.DEVNULL)
+            for line in out.splitlines()[1:]:
+                parts = re.split(r"\s+", line.strip())
+                if len(parts) >= 2:
+                    try:
+                        pids.add(int(parts[1]))
+                    except Exception:
+                        continue
+            return pids
+        except Exception:
+            pass
+
+        # Try ss
+        try:
+            out = subprocess.check_output(["ss", "-ltnp"], universal_newlines=True, stderr=subprocess.DEVNULL)
+            for line in out.splitlines():
+                if f":{port_str} " in line or f":{port_str}\n" in line or f":{port_str}:" in line:
+                    # look for pid=NUM or users:("prog",pid,
+                    m = re.search(r"pid=(\d+)", line)
+                    if m:
+                        try:
+                            pids.add(int(m.group(1)))
+                        except Exception:
+                            pass
+            if pids:
+                return pids
+        except Exception:
+            pass
+
+        # Last resort: netstat parsing on Unix
+        try:
+            out = subprocess.check_output(["netstat", "-ltnp"], universal_newlines=True, stderr=subprocess.DEVNULL)
+            for line in out.splitlines():
+                if f":{port_str} " in line:
+                    parts = re.split(r"\s+", line.strip())
+                    if len(parts) >= 7:
+                        pidprog = parts[6]
+                        if "/" in pidprog:
+                            pid = pidprog.split("/")[0]
+                            try:
+                                pids.add(int(pid))
+                            except Exception:
+                                pass
+            return pids
+        except Exception:
+            return pids
+
+
+def terminate_pids(pids, force=False):
+    """Attempt to terminate the provided PIDs. On Unix try SIGTERM then SIGKILL if needed.
+    On Windows use taskkill /PID <pid> /F when force True or /PID <pid> otherwise.
+    """
+    if not pids:
+        return
+    for pid in list(pids):
+        try:
+            if sys.platform.startswith("win"):
+                cmd = ["taskkill", "/PID", str(pid)]
+                if force:
+                    cmd.append("/F")
+                subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    continue
+        except Exception as e:
+            # Best effort; continue attempting to kill other PIDs
+            print(f"Failed to terminate PID {pid}: {e}")
+
 
 
 def main():
