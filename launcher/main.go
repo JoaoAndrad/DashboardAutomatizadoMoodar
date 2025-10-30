@@ -281,6 +281,24 @@ func ensureResidentLauncher() {
 
     // Start resident launcher with the same args and proxy IO; wait for it to finish
     args := os.Args[1:]
+    // Ensure the resident launcher will operate on Documents/Moodinho/project
+    residentProject := filepath.Join(moodinhoDir, "project")
+    // If user did not provide a --project flag, add it so the resident will
+    // use the central Documents/Moodinho/project location by default.
+    hasProject := false
+    for _, a := range args {
+        if a == "--project" || a == "-project" || strings.HasPrefix(a, "--project=") || strings.HasPrefix(a, "-project=") {
+            hasProject = true
+            break
+        }
+    }
+    if !hasProject {
+        args = append(args, "--project", residentProject)
+    }
+
+    // Create the resident project dir if missing (empty bootstrap)
+    _ = os.MkdirAll(residentProject, 0o755)
+
     cmd := exec.Command(residentPath, args...)
     cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
@@ -304,6 +322,12 @@ func main() {
 
     // Ensure there's a resident launcher in Documents\Moodinho and delegate to it
     ensureResidentLauncher()
+
+    // If project was not provided (default "."), use the resident Documents/Moodinho/project
+    if *project == "." || strings.TrimSpace(*project) == "" {
+        docs := getUserDocumentsDir()
+        *project = filepath.Join(docs, "Moodinho", "project")
+    }
 
     apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", *owner, *repo)
     fmt.Printf("Launcher: checking releases for %s/%s...\n", *owner, *repo)
