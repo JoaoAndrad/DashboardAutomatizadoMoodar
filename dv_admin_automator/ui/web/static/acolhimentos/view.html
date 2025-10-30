@@ -1,0 +1,789 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Detalhe do acolhido — Acolhimentos</title>
+    <style>
+      :root{ --bg1: linear-gradient(135deg,#ff9ad1 0%,#7bd1ff 100%); --card-bg: rgba(255,255,255,0.98); --accent-pink:#ff4fa3; --accent-blue:#2ea6ff; --muted:#6b6b7a }
+      html,body{height:100%;margin:0;font-family:Inter, system-ui, 'Segoe UI', Roboto, Arial}
+      body{display:flex;align-items:flex-start;justify-content:center;background:var(--bg1);padding:1.2rem}
+      .wrap{width:100%;max-width:1200px}
+
+      /* topbar / header */
+      .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+      .top .title{font-weight:700;font-size:18px;color:#102a43}
+
+      /* main card that contains left (form) and right (sidebar) */
+      .panel{display:grid;grid-template-columns:1fr 360px;gap:16px}
+      .card{background:var(--card-bg);border-radius:12px;padding:18px;box-shadow:0 12px 30px rgba(0,0,0,0.10);overflow:hidden}
+
+      .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+      label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+      input[type=text], input[type=date], input[type=email], select, textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #e9edf2;font-size:14px;background:white}
+      textarea{min-height:120px}
+      .full{grid-column:1 / -1}
+      .meta{font-size:12px;color:var(--muted);margin-top:6px}
+      .badges{display:flex;gap:8px;align-items:center}
+      .badge{background:#ffffffaa;color:#0b76d1;padding:6px 10px;border-radius:999px;font-weight:700;font-size:12px;border:1px solid rgba(46,166,255,0.12)}
+
+      /* buttons like on dashboard */
+      .actions{display:flex;gap:8px;flex-wrap:wrap}
+      .btn{appearance:none;border:0;padding:10px 12px;border-radius:8px;font-weight:700;color:white;cursor:pointer}
+      .btn.primary{background:linear-gradient(90deg,var(--accent-pink),var(--accent-blue))}
+      .btn.secondary{background:#ffffff;border:1px solid #eef0f6;color:#334155}
+
+      .right-col{display:flex;flex-direction:column;gap:12px}
+      .right-col .card{padding:12px}
+      .timeline{max-height:360px;overflow:auto;border-radius:8px;padding:8px;border:1px dashed #eee;background:#fff}
+      .timeline .item{padding:8px;border-bottom:1px solid #f3f3f6}
+      .small{font-size:12px;color:var(--muted)}
+
+      /* status colors */
+      .status-em{color:#0a84ff;font-weight:700}
+      .status-finalizado{color:#1f8a3b;font-weight:700}
+
+      /* responsive adjustments */
+      @media(max-width:900px){
+        .panel{grid-template-columns:1fr}
+        .form-grid{grid-template-columns:1fr}
+        .right-col{order:2}
+      }
+
+      @media(max-width:520px){
+        body{padding:10px}
+        .wrap{padding:0}
+        .btn{padding:10px}
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <div class="title">Detalhe do acolhido</div>
+        <div class="actions">
+          <!-- Export and Revert removed as requested -->
+          <button id="btn_save" class="btn primary" disabled>Salvar alterações</button>
+        </div>
+        <!-- right-aligned controls: save status + back button -->
+        <div class="right-controls" style="display:flex;align-items:center;gap:8px;margin-left:auto">
+          <div id="save_status" class="small" style="margin-top:6px;color:#1f8a3b"></div>
+          <button id="btn_back" class="btn secondary">Voltar para lista</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div>
+              <div id="patient_name_hdr" style="font-weight:700;font-size:18px">—</div>
+              <div class="small" id="patient_meta">ID • Data da solicitação • Empresa</div>
+            </div>
+            <div class="badges">
+              <div id="status_badge" class="badge">—</div>
+            </div>
+          </div>
+
+          <form id="detail_form">
+            <div class="form-grid">
+                <input type="hidden" id="version" />
+              <div>
+                <label for="request_date">Data da Solicitação</label>
+                <input id="request_date" type="date" />
+              </div>
+              <div>
+                <label for="company">Empresa</label>
+                <input id="company" type="text" />
+              </div>
+
+              <div class="full">
+                <label for="patient_name">Nome do paciente</label>
+                <input id="patient_name" type="text" />
+              </div>
+
+              <div>
+                <label for="collaborator_name">Nome do colaborador (Em caso de familiar)</label>
+                <input id="collaborator_name" type="text" />
+              </div>
+              <div>
+                <label for="email">E-mail</label>
+                <input id="email" type="email" />
+              </div>
+
+              <div>
+                <label for="cpf">CPF</label>
+                <input id="cpf" type="text" placeholder="000.000.000-00" />
+              </div>
+              <div>
+                <label for="phone">Telefone</label>
+                <input id="phone" type="text" />
+              </div>
+
+              <div>
+                <label for="project">Projeto vinculado</label>
+                <input id="project" type="text" />
+              </div>
+              <div>
+                <label for="funding_duration">Tempo de custeio</label>
+                <input id="funding_duration" type="text" />
+              </div>
+
+              <div>
+                <label for="funding_type">Formato do Custeio</label>
+                <input id="funding_type" type="text" />
+              </div>
+              <div>
+                <label for="cs_responsible">CS Responsável</label>
+                <input id="cs_responsible" type="text" />
+              </div>
+
+              <div>
+                <label for="funding_start_month">Mês de Início do Custeio</label>
+                <input id="funding_start_month" type="month" />
+              </div>
+              <div>
+                <label for="funding_end_month">Último mês do custeio</label>
+                <input id="funding_end_month" type="month" />
+              </div>
+
+              <div>
+                <label for="status">Status</label>
+                <select id="status">
+                  <option>— selecione —</option>
+                  <option>Pendente</option>
+                  <option>Contatado</option>
+                  <option>Em acolhimento</option>
+                  <option>Consulta experimental</option>
+                  <option>Finalizado</option>
+                  <option>Sem retorno</option>
+                </select>
+              </div>
+              <div>
+                <label for="acolhedor">Acolhedor</label>
+                <input id="acolhedor" type="text" />
+              </div>
+
+              <div class="full">
+                <label for="notes">Considerações / Observações</label>
+                <textarea id="notes"></textarea>
+              </div>
+
+              <div>
+                <label for="last_conference">Última conferência</label>
+                <input id="last_conference" type="text" />
+              </div>
+              <div>
+                <label for="last_return_rh">Ultimo Retono pro RH</label>
+                <input id="last_return_rh" type="date" />
+              </div>
+
+              <div>
+                <label for="rh_responsible">Responsável do RH)</label>
+                <input id="rh_responsible" type="text" />
+              </div>
+              <div>
+                <label for="last_modified_at">Última modificação</label>
+                <input id="last_modified_at" type="text" disabled />
+              </div>
+
+              <div class="full small meta">
+                <div>ID interno: <span id="internal_id">—</span> &nbsp; • &nbsp; Versão: <span id="version">—</span></div>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="right-col">
+          <!-- Ações rápidas removed as requested -->
+
+          <div class="card" id="card_history">
+            <div style="font-weight:700;margin-bottom:8px">Histórico de consultas</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button id="btn_check_history" class="btn secondary" disabled>Verificar histórico de consultas</button>
+              <div id="history_status" class="small" style="color:#6b6b7a">Nenhuma verificação realizada.</div>
+            </div>
+          </div>
+
+          <!-- Audit / Histórico removed as requested -->
+
+          <div class="card">
+            <div style="font-weight:700;margin-bottom:8px">Anexos</div>
+            <div class="small">Nenhum anexo.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // initial loading overlay to prevent interaction until autoLoadFromQuery completes
+      (function injectLoadingOverlay(){
+        const ov = document.createElement('div');
+        ov.id = 'loading_overlay';
+        ov.style.position = 'fixed'; ov.style.left='0'; ov.style.top='0'; ov.style.width='100%'; ov.style.height='100%'; ov.style.background='rgba(255,255,255,0.9)'; ov.style.zIndex='99999'; ov.style.display='flex'; ov.style.alignItems='center'; ov.style.justifyContent='center';
+        ov.innerHTML = `<div style="text-align:center;color:#102a43;font-weight:700">Carregando dados do acolhido...</div>`;
+        document.body.appendChild(ov);
+      })();
+
+      // This page is a static template for the acolhido detail view.
+      // Later we'll wire it to GET /api/acolhimentos/{id} and PATCH to save.
+      // For now we expose a helper to populate fields from a JS object:
+      function populateAcolhido(data){
+        if(!data) return;
+        const map = {
+          request_date: 'request_date',
+          patient_name: 'patient_name',
+          company: 'company',
+          collaborator_name: 'collaborator_name',
+          email: 'email',
+          cpf: 'cpf',
+          phone: 'phone',
+          project: 'project',
+          funding_duration: 'funding_duration',
+          funding_type: 'funding_type',
+          cs_responsible: 'cs_responsible',
+          funding_start_month: 'funding_start_month',
+          funding_end_month: 'funding_end_month',
+          status: 'status',
+          notes: 'notes',
+          rh_responsible: 'rh_responsible',
+          last_return_rh: 'last_return_rh',
+          last_conference: 'last_conference',
+          acolhedor: 'acolhedor',
+          last_modified_at: 'last_modified_at',
+          version: 'version',
+          uuid: 'internal_id'
+        };
+        Object.keys(map).forEach(k=>{
+          const el = document.getElementById(map[k]);
+          if(!el) return;
+          let val = (data[k]!==undefined && data[k]!==null) ? data[k] : '';
+          // normalize date/month values for input types
+          try{
+            if(val && (el.type === 'date' || el.type === 'month')){
+              // helper to parse common date formats into yyyy-mm-dd
+              const toDateValue = (s)=>{
+                if(!s) return '';
+                s = String(s).trim();
+                // ISO yyyy-mm-dd
+                if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+                // dd/mm/yyyy
+                let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+                if(m){ const d=m[1].padStart(2,'0'), mo=m[2].padStart(2,'0'), y=m[3]; return `${y}-${mo}-${d}`; }
+                // mm/yyyy or mm-yy
+                m = s.match(/^(\d{1,2})[\/\-](\d{4})$/);
+                if(m){ const mo=m[1].padStart(2,'0'), y=m[2]; return `${y}-${mo}-01`; }
+                // try Date parse fallback
+                const dt = new Date(s);
+                if(!isNaN(dt.getTime())){
+                  const y = dt.getFullYear(); const mo = String(dt.getMonth()+1).padStart(2,'0'); const d = String(dt.getDate()).padStart(2,'0');
+                  return `${y}-${mo}-${d}`;
+                }
+                return '';
+              };
+              const parsed = toDateValue(val);
+              if(parsed){
+                el.value = (el.type === 'month') ? parsed.slice(0,7) : parsed.slice(0,10);
+                return;
+              }
+            }
+          }catch(e){ /* continue and set raw value */ }
+          // preserve existing values for sensitive fields if incoming value is empty
+          try{
+            const fieldName = k;
+            const preserveIfEmpty = ['email','company'];
+            if((val === '' || val === null) && preserveIfEmpty.indexOf(fieldName) !== -1 && el.value && String(el.value).trim() !== ''){
+              // keep current DOM value
+            } else {
+              el.value = val;
+            }
+          }catch(e){ el.value = val; }
+        });
+
+        // header + badge
+        document.getElementById('patient_name_hdr').textContent = data.patient_name || '—';
+        document.getElementById('status_badge').textContent = data.status || '—';
+        document.getElementById('patient_meta').textContent = (data.uuid||'—') + ' • ' + (data.request_date||'—') + ' • ' + (data.company||'—');
+        // refresh saved loaded record from DOM so we keep the merged state
+        try{
+          const loaded = {};
+          Object.keys(map).forEach(k=>{ const el = document.getElementById(map[k]); if(el) loaded[k] = el.value; });
+          window._acolhidoLoaded = loaded;
+        }catch(e){ try{ window._acolhidoLoaded = Object.assign({}, data); }catch(_){ window._acolhidoLoaded = data; } }
+        // Console debug summary (redact any long fields)
+        try{
+          const safe = Object.assign({}, data);
+          if(safe.notes) safe.notes = (safe.notes.length>120)? safe.notes.slice(0,117)+'...': safe.notes;
+          if(safe.email) safe.email = safe.email.replace(/(.{3}).+(@.+)/, '$1***$2');
+          console.log('populateAcolhido -> populated fields for id:', safe.uuid, safe);
+        }catch(e){ /* ignore */ }
+      }
+
+      // expose helper for testing from console
+      window.populateAcolhido = populateAcolhido;
+
+  // If URL includes ?id=..., try to fetch that record from /api/acolhimentos and populate the form.
+      (async function autoLoadFromQuery(){
+        const start = Date.now();
+        console.group('Acolhimentos: view autoLoadFromQuery');
+        try{
+          const params = new URLSearchParams(window.location.search);
+          const id = params.get('id');
+          console.log('Query id=', id);
+          if(!id){ console.log('No id in query - skipping auto load');
+            // remove overlay and allow navigation/back even if no id
+            try{ document.getElementById('loading_overlay')?.remove(); }catch(e){}
+            console.groupEnd(); return; }
+          // fetch all rows from the existing API stub and find the record
+          console.log('Request -> GET /api/acolhimentos to find record', id);
+          const res = await fetch('/api/acolhimentos', {credentials:'same-origin'});
+          console.log('HTTP status:', res.status, res.statusText);
+          if(!res.ok){ console.error('Failed to fetch records'); console.groupEnd(); return; }
+          const j = await res.json();
+          console.log('Response (raw):', j);
+          const rows = j.rows || [];
+          const rec = rows.find((r, idx) => {
+            if(r.uuid && r.uuid.toString() === id.toString()) return true;
+            if(r.uuid === undefined && id.startsWith('row_') && ('row_'+rows.indexOf(r))===id) return true;
+            return false;
+          });
+          if(rec){
+            console.log('Record found, id=', id, 'populating');
+            populateAcolhido(rec);
+            // enable action buttons now that data is loaded
+            try{ document.getElementById('btn_save').disabled = false; }catch(e){}
+            try{ document.getElementById('btn_check_history').disabled = false; }catch(e){}
+            try{ document.getElementById('loading_overlay')?.remove(); }catch(e){}
+            // set internal id and version display if present
+            document.getElementById('internal_id').textContent = rec.uuid || ('row_'+rows.indexOf(rec));
+            if(rec.version) {
+              document.getElementById('version').value = rec.version;
+              document.getElementById('version').textContent = rec.version;
+            }
+          } else {
+            console.warn('Registro não encontrado para id=', id);
+            // no record found — remove overlay so user can interact (or go back)
+            try{ document.getElementById('loading_overlay')?.remove(); }catch(e){}
+          }
+          console.log('autoLoadFromQuery duration (ms):', Date.now()-start);
+          console.groupEnd();
+        }catch(e){ console.error('Erro ao carregar acolhido:', e); console.groupEnd(); }
+      })();
+
+      // Save status helper — show a small, non-blocking text under the save button
+      function setSaveStatus(msg, isError){
+        try{
+          const el = document.getElementById('save_status');
+          if(!el) return;
+          el.textContent = msg || '';
+          el.style.color = isError ? '#ff6b6b' : '#1f8a3b';
+          // clear after a few seconds
+          if(msg){
+            clearTimeout(window._saveStatusTimer);
+            window._saveStatusTimer = setTimeout(()=>{ try{ el.textContent = ''; }catch(_){} }, 4500);
+          }
+        }catch(e){ console.log('setSaveStatus error', e); }
+      }
+
+      // Collect form data as an object to send to PATCH
+      function collectFormData(){
+  const keys = ['request_date','patient_name','company','collaborator_name','email','cpf','phone','project','funding_duration','funding_type','cs_responsible','funding_start_month','funding_end_month','status','notes','rh_responsible','last_return_rh','last_conference','acolhedor'];
+        const out = {};
+
+        // helper: format yyyy-mm-dd -> dd/mm/yyyy
+        const formatDateForPayload = (val)=>{
+          if(!val) return '';
+          val = String(val).trim();
+          if(/^\d{4}-\d{2}-\d{2}$/.test(val)){
+            const [y,mo,d] = val.split('-'); return `${d}/${mo}/${y}`;
+          }
+          // already dd/mm/yyyy
+          if(/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(val)) return val;
+          // try to parse ISO or other formats
+          const dt = new Date(val);
+          if(!isNaN(dt.getTime())){
+            const da = String(dt.getDate()).padStart(2,'0'); const mo = String(dt.getMonth()+1).padStart(2,'0'); const y = dt.getFullYear();
+            return `${da}/${mo}/${y}`;
+          }
+          return val;
+        };
+
+        keys.forEach(k=>{
+          const el = document.getElementById(k);
+          if(!el) return;
+          let v = el.value;
+          // if this is the request_date input (type=date), format to dd/mm/yyyy for payload
+          if(k === 'request_date'){
+            v = formatDateForPayload(v);
+          }
+          out[k] = v;
+        });
+
+        // preserve some fields from the originally loaded record when they would otherwise be empty
+        // this prevents accidental erasure of e-mail and company when the page didn't populate them properly
+        try{
+          if(window._acolhidoLoaded){
+            ['email','company'].forEach(f=>{
+              if((out[f]===undefined || String(out[f]).trim()==='') && window._acolhidoLoaded[f]){
+                out[f] = window._acolhidoLoaded[f];
+              }
+            });
+          }
+        }catch(e){ /* ignore */ }
+
+        // include version if available
+        const verEl = document.getElementById('version');
+        if(verEl && verEl.value) out.version = verEl.value;
+        return out;
+      }
+
+      // CPF formatting helper: formats as 000.000.000-00 while typing
+      (function attachCpfFormatter(){
+        const cpfEl = document.getElementById('cpf');
+        if(!cpfEl) return;
+
+        const formatCpf = (v)=>{
+          const digits = String(v||'').replace(/\D/g,'').slice(0,11);
+          if(!digits) return '';
+          if(digits.length <= 3) return digits;
+          if(digits.length <= 6) return digits.slice(0,3) + '.' + digits.slice(3);
+          if(digits.length <= 9) return digits.slice(0,3) + '.' + digits.slice(3,6) + '.' + digits.slice(6);
+          return digits.slice(0,3) + '.' + digits.slice(3,6) + '.' + digits.slice(6,9) + '-' + digits.slice(9);
+        };
+
+        // input handler
+        cpfEl.addEventListener('input', (e)=>{
+          const pos = cpfEl.selectionStart || cpfEl.value.length;
+          const before = cpfEl.value;
+          const formatted = formatCpf(before);
+          cpfEl.value = formatted;
+          // try to restore cursor near end (best-effort)
+          try{ cpfEl.selectionStart = cpfEl.selectionEnd = formatted.length; }catch(_){ }
+        });
+
+        // on paste, sanitize and format
+        cpfEl.addEventListener('paste', (ev)=>{
+          ev.stopPropagation();
+          ev.preventDefault();
+          const text = (ev.clipboardData || window.clipboardData).getData('text') || '';
+          cpfEl.value = formatCpf(text);
+        });
+
+        // on blur, ensure final formatting
+        cpfEl.addEventListener('blur', ()=>{
+          cpfEl.value = formatCpf(cpfEl.value);
+        });
+      })();
+
+      // Save button - call PATCH /api/acolhimentos/{id}
+      document.getElementById('btn_save').addEventListener('click', async ()=>{
+        const id = document.getElementById('internal_id').textContent || new URLSearchParams(window.location.search).get('id');
+  if(!id){ setSaveStatus('Erro', true); return; }
+
+        const saveBtn = document.getElementById('btn_save');
+        if(!saveBtn) return;
+        if(saveBtn.disabled) return; // avoid duplicate clicks
+        const prevText = saveBtn.textContent;
+        // show loading state
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Salvando...';
+
+        const payload = collectFormData();
+        console.group('Acolhimentos: save click');
+        console.log('Saving id=', id, 'payload (truncated):', (function(){ const p=Object.assign({},payload); if(p.notes && p.notes.length>120) p.notes = p.notes.slice(0,117)+'...'; return p; })());
+        const start = Date.now();
+        try{
+          const res = await fetch('/api/acolhimentos/'+encodeURIComponent(id), {method:'PATCH', credentials:'same-origin', headers:{'content-type':'application/json'}, body: JSON.stringify(payload)});
+          console.log('HTTP status:', res.status, res.statusText);
+          if(res.status === 409){
+            const j = await res.json();
+            console.warn('Conflict on save:', j);
+            // restore UI state and show simple status
+            saveBtn.disabled = false; saveBtn.textContent = prevText;
+            setSaveStatus('Erro', true);
+            // Optionally populate with current
+            if(j && j.current) populateAcolhido(j.current);
+            console.groupEnd();
+            return;
+          }
+          if(!res.ok) throw new Error('Falha ao salvar: '+res.status);
+          const j = await res.json();
+          console.log('Save response JSON:', j);
+          if(j && j.ok && j.row){
+            populateAcolhido(j.row);
+            // update version display
+            if(j.row.version){ document.getElementById('version').value = j.row.version; document.getElementById('version').textContent = j.row.version; }
+            setSaveStatus('Atualizado', false);
+          }
+          console.log('save duration (ms):', Date.now()-start);
+          // restore button
+          saveBtn.disabled = false; saveBtn.textContent = prevText;
+          console.groupEnd();
+        }catch(e){
+          console.error('Save error:', e);
+          // restore button
+          try{ saveBtn.disabled = false; saveBtn.textContent = prevText; }catch(_){ }
+          console.groupEnd();
+          setSaveStatus('Erro', true);
+        }
+      });
+
+      // Back to list button: try history.back(), fallback to the acolhimentos list route
+      (function attachBackHandler(){
+        const b = document.getElementById('btn_back');
+        if(!b) return;
+        b.addEventListener('click', (e)=>{
+          try{
+            if(document.referrer && document.referrer.includes('/acolhimentos')){
+              history.back();
+            } else {
+              // fallback route - adjust if your list lives elsewhere
+              window.location.href = '/acolhimentos';
+            }
+          }catch(err){ window.location.href = '/acolhimentos'; }
+        });
+      })();
+
+      // ---- Appointments history: fetch, render and export as PDF (print-to-PDF) ----
+      (function attachHistoryHandler(){
+        const btn = document.getElementById('btn_check_history');
+        const statusEl = document.getElementById('history_status');
+        if(!btn) return;
+
+        const parseDateString = (s)=>{
+          if(!s) return null;
+          s = String(s).trim();
+          // dd/mm/yyyy or dd/mm/yyyy hh:mm
+          let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ T](.*))?$/);
+          if(m){ const d = m[1].padStart(2,'0'), mo = m[2].padStart(2,'0'), y = m[3].length===2?('20'+m[3]):m[3]; // try to include time if present
+            const timePart = m[4]; if(timePart){ const dt = new Date(`${y}-${mo}-${d}T${timePart}`); if(!isNaN(dt.getTime())) return dt; }
+            return new Date(`${y}-${mo}-${d}`); }
+          // yyyy-mm-dd
+          if(/^\d{4}-\d{2}-\d{2}/.test(s)){
+            const dt = new Date(s); if(!isNaN(dt.getTime())) return dt;
+          }
+
+          // Month-name formats like "Oct. 14, 2025, 4:40 p.m." or "Nov 28, 2025, 6 p.m."
+          const monthNames = {
+            jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, sept:9, oct:10, nov:11, dec:12
+          };
+          // normalize dots and spaces: change e.g. "Oct. 14, 2025, 4:40 p.m." -> "Oct 14, 2025, 4:40 pm"
+          let norm = s.replace(/\./g,'').replace(/\s+/g,' ').trim();
+          // regex: MonthName dd, yyyy, hh(:mm)? (am|pm)?
+          let mm = norm.match(/^([A-Za-z]{3,9})\s+(\d{1,2}),\s*(\d{4})(?:,?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$/i);
+          if(mm){
+            const mname = mm[1].toLowerCase(); const day = parseInt(mm[2],10); const year = parseInt(mm[3],10);
+            const hourRaw = mm[4] ? parseInt(mm[4],10) : 0; const minute = mm[5] ? parseInt(mm[5],10) : 0; const ampm = mm[6] ? mm[6].toLowerCase() : null;
+            const mon = monthNames[mname.slice(0,3)] || monthNames[mname];
+            if(mon){
+              let hour = hourRaw;
+              if(ampm){ if(ampm==='pm' && hour<12) hour += 12; if(ampm==='am' && hour===12) hour = 0; }
+              // build Date in local timezone
+              const dt = new Date(year, mon-1, day, hour, minute, 0, 0);
+              if(!isNaN(dt.getTime())) return dt;
+            }
+          }
+
+          // fallback to Date parse
+          const dt = new Date(s);
+          return isNaN(dt.getTime())? null : dt;
+        };
+
+        // Only fetch by email from the view — do not send participant_id.
+        // Add logs and a short client-side guard to avoid duplicate requests.
+        const fetchHistory = async (email)=>{
+          const params = new URLSearchParams();
+          if(email) params.set('email', email);
+          const url = '/api/appointments/history?'+params.toString();
+          console.log('[history] fetchHistory -> start', {ts:new Date().toISOString(), email, url});
+          const res = await fetch(url, {credentials:'same-origin', headers:{'X-Requested-From':'acolhimentos.view'}});
+          console.log('[history] fetchHistory -> fetched', {ts:new Date().toISOString(), status: res.status});
+          if(!res.ok) throw new Error('Falha: '+res.status);
+          return await res.json();
+        };
+
+        const normalizeAppointments = (resp)=>{
+          // backend shape may vary; try common locations
+          let appts = resp && (resp.appointments || resp.rows || resp.data || resp.items || (resp.history && resp.history.appointments) || resp.appointments_list);
+          if(!Array.isArray(appts)){
+            // maybe response is the array itself
+            if(Array.isArray(resp)) appts = resp; else appts = [];
+          }
+          return appts;
+        };
+
+        const findTherapistName = (a)=>{
+          if(!a) return '';
+          return a.therapist || a.provider || a.professional || a.practitioner || a.therapist_name || a.professional_name || a.provider_name || '';
+        };
+
+  // Format date as DD/MM/YYYY HH:MM (24h). Accepts Date or parseable string.
+  const toIsoDate = (d)=>{ if(!d) return ''; const dt = (d instanceof Date)? d : parseDateString(d); if(!dt) return ''; const y = dt.getFullYear(); const mo = String(dt.getMonth()+1).padStart(2,'0'); const da = String(dt.getDate()).padStart(2,'0'); const hh = String(dt.getHours()).padStart(2,'0'); const mm = String(dt.getMinutes()).padStart(2,'0'); return `${da}/${mo}/${y} ${hh}:${mm}`; };
+
+        const buildReportHtml = (title, summary, appointments)=>{
+          const style = `body{font-family:Inter,system-ui,Arial;margin:20px;color:#102a43} h1{font-size:20px} table{width:100%;border-collapse:collapse;margin-top:12px} th,td{padding:8px;border:1px solid #e9edf2;text-align:left;font-size:13px} .summary{display:flex;gap:20px;margin-top:8px} .card{background:#fff;padding:10px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06)} .meta{color:#6b6b7a;font-size:13px}`;
+          let rowsHtml = '';
+          appointments.forEach(a=>{
+            // prefer the 'schedule' field provided by the appointments page
+            const date = toIsoDate(a.schedule || a.date || a.consultation_date || a.data || a.datetime || a.ended_at || a.started_at);
+            const therapist = findTherapistName(a) || '';
+            const plan = a.plan || a['associated plan'] || a['Associated plan'] || a.plano || a.service || a.type || '';
+            const duration = a.duration || a.length || a['Duration'] || '';
+            const status = a.status || a.estado || '';
+            rowsHtml += `<tr><td>${date}</td><td>${therapist}</td><td>${plan}</td><td>${duration}</td><td>${status}</td></tr>`;
+          });
+
+          // build counts HTML
+          let countsPlanHtml = '';
+          if(summary.countsByPlan){
+            countsPlanHtml += '<ul style="margin:0;padding-left:18px">';
+            Object.keys(summary.countsByPlan).sort().forEach(k=>{ countsPlanHtml += `<li>${k}: ${summary.countsByPlan[k]}</li>`; });
+            countsPlanHtml += '</ul>';
+          }
+          let countsTherapistHtml = '';
+          if(summary.countsByTherapist){
+            countsTherapistHtml += '<ul style="margin:0;padding-left:18px">';
+            Object.keys(summary.countsByTherapist).sort().forEach(k=>{ countsTherapistHtml += `<li>${k}: ${summary.countsByTherapist[k]}</li>`; });
+            countsTherapistHtml += '</ul>';
+          }
+
+          // prepare countsByStatus HTML
+          let countsStatusHtml = '';
+          if(summary.countsByStatus){
+            countsStatusHtml += '<ul style="margin:0;padding-left:18px">';
+            Object.keys(summary.countsByStatus).sort().forEach(k=>{ countsStatusHtml += `<li>${k}: ${summary.countsByStatus[k]}</li>`; });
+            countsStatusHtml += '</ul>';
+          }
+
+          return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>${style}</style></head><body><h1>${title}</h1><div class="summary"><div class="card"><div class="meta"><strong>Data da primeira consulta geral</strong><div>${summary.firstOverall||'—'}</div></div></div><div class="card"><div class="meta"><strong>Primeira consulta com último terapeuta</strong><div>${summary.firstWithLastTherapist||'—'}</div></div></div><div class="card"><div class="meta"><strong>Data da última consulta realizada</strong><div>${summary.lastPerformed||'—'}</div></div></div><div class="card"><div class="meta"><strong>Data de consultas futuras</strong><div>${summary.nextFuture||'—'}</div></div></div></div>
+          <div style="margin-top:12px;display:flex;gap:12px">
+            <div style="flex:1;background:#fff;padding:10px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06)"><div style="font-size:13px;color:#6b6b7a"><strong>Total de consultas</strong></div><div style="font-weight:700;margin-top:6px">${summary.totalAppointments||appointments.length}</div></div>
+            <div style="flex:1;background:#fff;padding:10px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06)"><div style="font-size:13px;color:#6b6b7a"><strong>Por plano</strong></div><div style="margin-top:6px">${countsPlanHtml||'<div>—</div>'}</div></div>
+            <div style="flex:1;background:#fff;padding:10px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06)"><div style="font-size:13px;color:#6b6b7a"><strong>Por terapeuta</strong></div><div style="margin-top:6px">${countsTherapistHtml||'<div>—</div>'}</div></div>
+            <div style="flex:1;background:#fff;padding:10px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06)"><div style="font-size:13px;color:#6b6b7a"><strong>Por status</strong></div><div style="margin-top:6px">${countsStatusHtml||'<div>—</div>'}</div></div>
+          </div>
+
+          <h2 style="margin-top:18px">Lista completa de consultas (${appointments.length})</h2><table><thead><tr><th>Data</th><th>Terapeuta</th><th>Plano/Serviço</th><th>Duração</th><th>Status</th></tr></thead><tbody>${rowsHtml}</tbody></table><p style="margin-top:18px;color:#6b6b7a;font-size:13px">Gerado em ${new Date().toLocaleString()}</p></body></html>`;
+        };
+
+        const openPrintWindow = (html)=>{
+          const w = window.open('', '_blank');
+          if(!w) { alert('O navegador bloqueou a abertura da janela de impressão. Permita popups e tente novamente.'); return; }
+          w.document.write(html);
+          w.document.close();
+          // give browser a short time to render
+          setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){ console.error('print error', e); } }, 300);
+        };
+
+        const renderModal = (summary, appointments)=>{
+          // remove existing modal if present
+          const prev = document.getElementById('history_modal'); if(prev) prev.remove();
+          const modal = document.createElement('div');
+          modal.id = 'history_modal';
+          modal.style.position = 'fixed'; modal.style.left='0'; modal.style.top='0'; modal.style.width='100%'; modal.style.height='100%'; modal.style.background='rgba(0,0,0,0.4)'; modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center'; modal.style.zIndex='9999';
+          const inner = document.createElement('div'); inner.style.width='90%'; inner.style.maxWidth='980px'; inner.style.maxHeight='90%'; inner.style.overflow='auto'; inner.style.background='white'; inner.style.borderRadius='10px'; inner.style.padding='18px'; inner.style.boxShadow='0 20px 60px rgba(0,0,0,0.3)';
+          // determine patient name for title (prefer page header, fallback to first appointment patient)
+          const patientName = (document.getElementById('patient_name_hdr') && document.getElementById('patient_name_hdr').textContent && document.getElementById('patient_name_hdr').textContent !== '—') ? document.getElementById('patient_name_hdr').textContent : (appointments && appointments.length? (appointments[0].patient || appointments[0].patient_name || appointments[0].name || '') : '');
+          const header = document.createElement('div'); header.style.display='flex'; header.style.justifyContent='space-between'; header.style.alignItems='center'; header.innerHTML = `<div><strong style="font-size:16px">Relatório - Histórico de consultas: ${patientName || ''}</strong><div style="color:#6b6b7a;font-size:13px">Total: ${appointments.length} consultas</div></div>`;
+          const buttons = document.createElement('div'); buttons.style.display='flex'; buttons.style.gap='8px';
+          const btnPrint = document.createElement('button'); btnPrint.className='btn primary'; btnPrint.textContent='Baixar PDF'; btnPrint.style.padding='8px 12px';
+          const btnClose = document.createElement('button'); btnClose.className='btn secondary'; btnClose.textContent='Fechar'; btnClose.style.padding='8px 12px';
+          buttons.appendChild(btnPrint); buttons.appendChild(btnClose); header.appendChild(buttons);
+          inner.appendChild(header);
+
+          // summary boxes
+          const sumWrap = document.createElement('div'); sumWrap.style.display='flex'; sumWrap.style.gap='12px'; sumWrap.style.marginTop='12px';
+          ['firstOverall','firstWithLastTherapist','lastPerformed','nextFuture'].forEach(k=>{
+            const c = document.createElement('div'); c.style.background='#fff'; c.style.padding='10px'; c.style.borderRadius='8px'; c.style.boxShadow='0 6px 18px rgba(0,0,0,0.06)'; c.style.flex='1';
+            const label = (k==='firstOverall') ? 'Data da primeira consulta geral' : (k==='firstWithLastTherapist') ? 'Primeira com último terapeuta' : (k==='lastPerformed') ? 'Data da última consulta realizada' : 'Data de consultas futuras';
+            c.innerHTML = `<div style="color:#6b6b7a;font-size:13px"><strong>${label}</strong></div><div style="margin-top:6px;font-weight:700">${summary[k]||'—'}</div>`; sumWrap.appendChild(c);
+          });
+          inner.appendChild(sumWrap);
+
+          // counts by plan / therapist
+          const countsWrap = document.createElement('div'); countsWrap.style.display='flex'; countsWrap.style.gap='12px'; countsWrap.style.marginTop='12px';
+          const planCard = document.createElement('div'); planCard.style.flex='1'; planCard.style.background='#fff'; planCard.style.padding='10px'; planCard.style.borderRadius='8px'; planCard.style.boxShadow='0 6px 18px rgba(0,0,0,0.06)'; planCard.innerHTML = `<div style="font-size:13px;color:#6b6b7a"><strong>Por plano</strong></div><div style="margin-top:6px">${(summary.countsByPlan)?Object.keys(summary.countsByPlan).sort().map(k=>`<div>${k}: ${summary.countsByPlan[k]}</div>`).join(''):'<div>—</div>'}</div>`;
+          const therapistCard = document.createElement('div'); therapistCard.style.flex='1'; therapistCard.style.background='#fff'; therapistCard.style.padding='10px'; therapistCard.style.borderRadius='8px'; therapistCard.style.boxShadow='0 6px 18px rgba(0,0,0,0.06)'; therapistCard.innerHTML = `<div style="font-size:13px;color:#6b6b7a"><strong>Por terapeuta</strong></div><div style="margin-top:6px">${(summary.countsByTherapist)?Object.keys(summary.countsByTherapist).sort().map(k=>`<div>${k}: ${summary.countsByTherapist[k]}</div>`).join(''):'<div>—</div>'}</div>`;
+          const totalCard = document.createElement('div'); totalCard.style.flex='1'; totalCard.style.background='#fff'; totalCard.style.padding='10px'; totalCard.style.borderRadius='8px'; totalCard.style.boxShadow='0 6px 18px rgba(0,0,0,0.06)'; totalCard.innerHTML = `<div style="font-size:13px;color:#6b6b7a"><strong>Total de consultas</strong></div><div style="font-weight:700;margin-top:6px">${summary.totalAppointments||appointments.length}</div>`;
+          countsWrap.appendChild(totalCard); countsWrap.appendChild(planCard); countsWrap.appendChild(therapistCard);
+          inner.appendChild(countsWrap);
+
+          // table
+          const tableWrap = document.createElement('div'); tableWrap.style.marginTop='16px';
+          const tbl = document.createElement('table'); tbl.style.width='100%'; tbl.style.borderCollapse='collapse';
+          const thead = document.createElement('thead'); thead.innerHTML = '<tr><th style="padding:8px;border:1px solid #e9edf2">Data</th><th style="padding:8px;border:1px solid #e9edf2">Terapeuta</th><th style="padding:8px;border:1px solid #e9edf2">Plano/Serviço</th><th style="padding:8px;border:1px solid #e9edf2">Duração</th><th style="padding:8px;border:1px solid #e9edf2">Status</th></tr>';
+          const tbody = document.createElement('tbody'); appointments.forEach(a=>{
+            const row = document.createElement('tr'); const date = toIsoDate(a.schedule || a.date || a.consultation_date || a.data || a.datetime || a.ended_at || a.started_at);
+            const therapist = findTherapistName(a) || '';
+            const plan = a.plan || a['associated plan'] || a.plano || a.service || a.type || '';
+            const duration = a.duration || a.length || a['Duration'] || '';
+            const status = a.status || a.estado || '';
+            row.innerHTML = `<td style="padding:8px;border:1px solid #e9edf2">${date}</td><td style="padding:8px;border:1px solid #e9edf2">${therapist}</td><td style="padding:8px;border:1px solid #e9edf2">${plan}</td><td style="padding:8px;border:1px solid #e9edf2">${duration}</td><td style="padding:8px;border:1px solid #e9edf2">${status}</td>`;
+            tbody.appendChild(row);
+          });
+          tbl.appendChild(thead); tbl.appendChild(tbody); tableWrap.appendChild(tbl); inner.appendChild(tableWrap);
+
+          modal.appendChild(inner); document.body.appendChild(modal);
+
+          btnClose.addEventListener('click', ()=>{ modal.remove(); });
+          btnPrint.addEventListener('click', ()=>{
+            const patientNameForPrint = patientName || (appointments && appointments.length? (appointments[0].patient || appointments[0].patient_name || appointments[0].name || '') : '');
+            const title = `Relatório - Histórico de consultas: ${patientNameForPrint}`;
+            const html = buildReportHtml(title, summary, appointments);
+            openPrintWindow(html);
+          });
+        };
+
+        btn.addEventListener('click', async ()=>{
+          // Prevent duplicate clicks/requests
+          if(btn.disabled || window._historyFetchInProgress) return;
+          window._historyFetchInProgress = true;
+          btn.disabled = true;
+          try{
+            statusEl.textContent = 'Carregando histórico...';
+            const emailEl = document.getElementById('email');
+            const emailVal = (emailEl && emailEl.value)? emailEl.value.trim() : '';
+            if(!emailVal){
+              alert('E-mail não encontrado na página.');
+              statusEl.textContent='E-mail não encontrado.';
+              return;
+            }
+            console.log('[history] button click', {ts:new Date().toISOString(), email: emailVal});
+            // Send only the email — view must not send participant_id
+            const resp = await fetchHistory(emailVal);
+            const appts = normalizeAppointments(resp);
+            if(!appts.length){ statusEl.textContent = 'Nenhuma consulta encontrada.'; alert('Nenhuma consulta encontrada para este participante.'); return; }
+            // compute summary
+            const parsed = appts.map(a=>{ const d = parseDateString(a.date||a.consultation_date||a.data||a.datetime||a.ended_at||a.started_at||a.schedule); return Object.assign({}, a, {__d: d}); }).filter(x=>x.__d);
+            parsed.sort((a,b)=>a.__d - b.__d);
+            const firstOverall = parsed.length? toIsoDate(parsed[0].__d) : '';
+            const lastOverall = parsed.length? toIsoDate(parsed[parsed.length-1].__d) : '';
+            const lastTherapist = parsed.length? findTherapistName(parsed[parsed.length-1]) : '';
+            let firstWithLast = '';
+            if(lastTherapist){ const withLast = parsed.filter(p=> findTherapistName(p)===lastTherapist); if(withLast.length) firstWithLast = toIsoDate(withLast[0].__d); }
+            // last performed (prefer status 'Realizada' or dates in the past) and next future appointment
+            const now = new Date();
+            const performedCandidates = parsed.filter(p=>{ try{ const st = (p.status||p.estado||'').toString().toLowerCase(); if(st.includes('realiz')) return true; return p.__d <= now; }catch(e){ return p.__d <= now; }});
+            const lastPerformed = performedCandidates.length? toIsoDate(performedCandidates[performedCandidates.length-1].__d) : '';
+            const futureAppts = parsed.filter(p=> p.__d > now);
+            const nextFuture = futureAppts.length? toIsoDate(futureAppts[0].__d) : '';
+            // compute counts
+            const countsByPlan = {};
+            const countsByTherapist = {};
+            const countsByStatus = {};
+            appts.forEach(a=>{
+              const plan = (a.plan || a['associated plan'] || a['Associated plan'] || a.plano || a.service || a.type || '').toString();
+              const therapist = (findTherapistName(a) || '').toString();
+              const status = (a.status || a.estado || '').toString();
+              if(plan){ countsByPlan[plan] = (countsByPlan[plan]||0) + 1; }
+              if(therapist){ countsByTherapist[therapist] = (countsByTherapist[therapist]||0) + 1; }
+              if(status){ countsByStatus[status] = (countsByStatus[status]||0) + 1; }
+            });
+            const summary = { firstOverall, firstWithLastTherapist: firstWithLast, lastOverall, lastPerformed, nextFuture, totalAppointments: appts.length, countsByPlan, countsByTherapist, countsByStatus };
+            renderModal(summary, appts);
+            statusEl.textContent = `Encontradas ${appts.length} consultas.`;
+          }catch(e){ console.error('Erro ao obter histórico:', e); statusEl.textContent = 'Erro ao carregar histórico'; alert('Erro ao carregar histórico: '+e.message); }
+        });
+      })();
+    </script>
+  </body>
+</html>

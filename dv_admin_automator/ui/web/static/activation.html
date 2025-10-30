@@ -91,7 +91,26 @@
       document.getElementById('activate').addEventListener('click', async ()=>{
         const code = document.getElementById('code').value.trim(); const pw = document.getElementById('master_password').value; if(!code||!pw){ log('Código e chave mestre obrigatórios'); return; }
         log('Enviando activate...');
-        try{ const r = await postJson('/api/activate', {code, master_password: pw}); const t = await r.text(); log('Response: ' + t); if(r.ok){ log('Ativação completa'); } }catch(e){ log('Erro: ' + e.message); }
+        try{
+          const r = await postJson('/api/activate', {code, master_password: pw});
+          const t = await r.text();
+          log('Response: ' + t);
+          if(r.ok){
+            log('Ativação completa');
+            // Inform the user and show a 5s countdown before redirecting to login
+            let seconds = 5;
+            log(`Você será redirecionado para o login em ${seconds} segundos`);
+            const iv = setInterval(()=>{
+              seconds -= 1;
+              if(seconds > 0){
+                log(`Redirecionando em ${seconds} segundos...`);
+              } else {
+                clearInterval(iv);
+                window.location.href = '/static/welcome.html';
+              }
+            }, 1000);
+          }
+        }catch(e){ log('Erro: ' + e.message); }
       });
 
       document.getElementById('reset_flow').addEventListener('click', ()=>{ document.getElementById('contact').value=''; document.getElementById('code').value=''; document.getElementById('master_password').value=''; document.getElementById('request_info').textContent=''; log('Fluxo resetado'); });

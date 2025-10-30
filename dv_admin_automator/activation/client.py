@@ -1,12 +1,8 @@
 from typing import Any ,Dict 
 import requests 
 from tenacity import Retrying ,wait_exponential ,stop_after_attempt ,retry_if_exception_type 
-
-
 class ActivationError (Exception ):
     pass 
-
-
 class ActivationClient :
     def __init__ (self ,base_url :str ,timeout :int =10 ,max_retries :int =3 ):
         self .base_url =base_url .rstrip ("/")
@@ -14,10 +10,8 @@ class ActivationClient :
         self .max_retries =max_retries 
     def _post (self ,path :str ,json_payload :dict )->Dict [str ,Any ]:
         url =f"{self .base_url }/{path .lstrip ('/')}"
-
         def _call ():
             return requests .post (url ,json =json_payload ,timeout =self .timeout )
-
         last_exc =None 
         for attempt in Retrying (stop =stop_after_attempt (self .max_retries ),wait =wait_exponential (min =1 ,max =8 ),retry =retry_if_exception_type ((requests .RequestException ,))):
             try :
@@ -26,7 +20,6 @@ class ActivationClient :
             except Exception as e :
                 last_exc =e 
                 raise 
-
     def confirm_code (self ,code :str )->Dict [str ,Any ]:
         url =f"{self .base_url }/confirm_code"
         try :
@@ -39,7 +32,6 @@ class ActivationClient :
             return resp .json ()
         except ValueError :
             raise ActivationError ("confirm_code: invalid JSON response")
-
     def submit_master_key (self ,code :str ,master_password :str )->Dict [str ,Any ]:
         url =f"{self .base_url }/submit_master_key"
         try :

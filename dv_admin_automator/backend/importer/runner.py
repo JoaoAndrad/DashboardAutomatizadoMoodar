@@ -2,19 +2,13 @@ import os
 import time 
 import traceback 
 from typing import Callable ,Optional ,Tuple 
-
 from ...browser .pool import get_default_pool 
-
 LOG_PREFIX ='[import_runner]'
-
-
 def _safe_log (log_fn :Callable [[str ,str ],None ],job_id :str ,msg :str ):
     try :
         log_fn (job_id ,f"{LOG_PREFIX } {msg }")
     except Exception :
         pass 
-
-
 def run_import (upload_path :str ,job_id :str ,log_fn :Callable [[str ,str ],None ],*,
 browser_session_id :Optional [str ]=None ,
 headless :bool =True ,minimized :bool =False ,
@@ -25,20 +19,17 @@ auto_confirm :bool =True )->Tuple [bool ,bool ,Optional [str ]]:
     created_local =False 
     try :
         _safe_log (log_fn ,job_id ,'starting import')
-
         if browser_session_id :
             manager =pool .get_manager (browser_session_id )
             if manager :
                 _safe_log (log_fn ,job_id ,f'reusing browser session {browser_session_id }')
             else :
                 _safe_log (log_fn ,job_id ,f'no session {browser_session_id } found; will create new browser')
-
         if not manager :
             _safe_log (log_fn ,job_id ,f'creating temporary browser (headless={headless })')
             session =pool .create_session (headless =headless )
             manager =pool .get_manager (session )
             created_local =True 
-
         if getattr (manager ,'driver',None ):
             driver =manager .driver 
         else :
@@ -51,12 +42,10 @@ auto_confirm :bool =True )->Tuple [bool ,bool ,Optional [str ]]:
         except Exception as e :
             _safe_log (log_fn ,job_id ,f'selenium imports failed: {e }')
             return False 
-
         urls ={
         'import_cpf':'https://webapp.moodar.com.br/moodashboard/corporate/basecpfemployeescompanies/import/',
         'import_email':'https://webapp.moodar.com.br/moodashboard/corporate/baseemailsemployeescompanies/import/'
         }
-
         target_urls =[]
         if import_type =='cpf':
             target_urls =[urls ['import_cpf']]
@@ -64,60 +53,47 @@ auto_confirm :bool =True )->Tuple [bool ,bool ,Optional [str ]]:
             target_urls =[urls ['import_email']]
         else :
             target_urls =[urls ['import_cpf'],urls ['import_email']]
-
         success =False 
         for url in target_urls :
             try :
                 _safe_log (log_fn ,job_id ,f'navigating to {url }')
                 manager .driver .get (url )
                 time .sleep (1 )
-
                 file_input =None 
                 try :
-
                     file_input =manager .driver .find_element (By .NAME ,'import_file')
                 except Exception :
                     pass 
                 if not file_input :
                     try :
-
                         file_input =manager .driver .find_element (By .CSS_SELECTOR ,"input[type='file']")
                     except Exception :
                         pass 
                 if not file_input :
-
                     try :
                         candidates =manager .driver .find_elements (By .XPATH ,"//input[contains(@id,'file') or contains(@name,'file') or contains(@id,'import') or contains(@name,'import')]")
                         if candidates and len (candidates )>0 :
                             file_input =candidates [0 ]
                     except Exception :
                         pass 
-
                 if not file_input :
                     _safe_log (log_fn ,job_id ,f'file input not found at {url }');
                     continue 
-
-
                 abs_path =os .path .abspath (upload_path )
                 _safe_log (log_fn ,job_id ,f'selecting file {abs_path }')
                 file_input .send_keys (abs_path )
-
-
                 try :
                     sel =Select (manager .driver .find_element (By .NAME ,'input_format'))
                     sel .select_by_value ('0')
                 except Exception :
                     _safe_log (log_fn ,job_id ,'format select not found - continuing')
-
                 try :
                     submit_btn =manager .driver .find_element (By .CSS_SELECTOR ,"input[type='submit'], button[type='submit']")
                     submit_btn .click ()
                 except Exception :
                     _safe_log (log_fn ,job_id ,'submit button not found or click failed')
-
                 time .sleep (2 )
                 _safe_log (log_fn ,job_id ,'upload step completed; waiting for preview/confirm')
-
                 try :
                     confirm_btn =None 
                     try :
@@ -127,7 +103,6 @@ auto_confirm :bool =True )->Tuple [bool ,bool ,Optional [str ]]:
                             confirm_btn =manager .driver .find_element (By .XPATH ,"//button[contains(., 'Confirm') or contains(., 'Confirmar')]")
                         except Exception :
                             confirm_btn =None 
-
                         if confirm_btn :
                             if auto_confirm :
                                 _safe_log (log_fn ,job_id ,'clicking confirm')
@@ -136,43 +111,20 @@ auto_confirm :bool =True )->Tuple [bool ,bool ,Optional [str ]]:
                                 _safe_log (log_fn ,job_id ,'confirm clicked')
                             else :
                                 _safe_log (log_fn ,job_id ,'awaiting manual confirmation by user (auto_confirm disabled)')
-
                                 sid =None 
                                 try :
-
                                     sid =getattr (manager ,'session_id',None )
                                 except Exception :
                                     sid =None 
                                 return True ,True ,sid 
                 except Exception :
                     _safe_log (log_fn ,job_id ,'confirm step failed (non-fatal)')
-
-
-
-
-
                 try :
                     try :
                         page_src =manager .driver .page_source or ''
                     except Exception :
                         page_src =''
                     if page_src and ('confirmar'in page_src .lower ()or 'confirm'in page_src .lower ()):
-
-                        try :
-                            import re as _re ,os as _os ,tempfile as _temp 
-                            def _sanitize (s :str )->str :
-                                return _re .sub (r'[^A-Za-z0-9_.-]','_',s or '')
-                            tmpdir =_os .path .join (_os .getcwd (),'tmp_uploads')
-                            _os .makedirs (tmpdir ,exist_ok =True )
-                            snap_name =f"import_{_sanitize (job_id )}_page.html"
-                            snap_path =_os .path .join (tmpdir ,snap_name )
-                            with open (snap_path ,'w',encoding ='utf-8')as _fh :
-                                _fh .write (page_src )
-                            _safe_log (log_fn ,job_id ,f'page snapshot saved for debug: {snap_path }')
-                        except Exception as _e :
-                            _safe_log (log_fn ,job_id ,f'failed to write page snapshot: {_e }')
-
-
                         _safe_log (log_fn ,job_id ,'detected confirm-like text in page; awaiting manual confirmation (heuristic)')
                         sid =None 
                         try :
@@ -181,33 +133,24 @@ auto_confirm :bool =True )->Tuple [bool ,bool ,Optional [str ]]:
                             sid =None 
                         return True ,True ,sid 
                 except Exception :
-
                     pass 
-
                 success =True 
                 break 
             except Exception as e :
                 _safe_log (log_fn ,job_id ,f'exception while processing {url }: {e }\n{traceback .format_exc ()}')
-
         if success :
             _safe_log (log_fn ,job_id ,'import run completed')
             return True ,False ,(getattr (manager ,'session_id',None )if manager else None )
         else :
             _safe_log (log_fn ,job_id ,'import run failed for all candidate urls')
             return False ,False ,None 
-
     except Exception as e :
         _safe_log (log_fn ,job_id ,f'exception: {e }\n{traceback .format_exc ()}')
         return False ,False ,None 
     finally :
-
         if created_local :
             try :
-
-
                 pool =get_default_pool ()
-
-
                 now =time .time ()
                 to_close =[]
                 for sid ,info in list (pool ._sessions .items ()):
@@ -220,10 +163,7 @@ auto_confirm :bool =True )->Tuple [bool ,bool ,Optional [str ]]:
                         pass 
             except Exception :
                 pass 
-
-
 def confirm_import_session (session_id :str ,job_id :str ,log_fn :Callable [[str ,str ],None ])->bool :
-
     try :
         pool =get_default_pool ()
         manager =pool .get_manager (session_id )
@@ -236,9 +176,7 @@ def confirm_import_session (session_id :str ,job_id :str ,log_fn :Callable [[str
         except Exception as e :
             _safe_log (log_fn ,job_id ,f'confirm_import_session: selenium import failed: {e }')
             return False 
-
         try :
-
             confirm_btn =None 
             try :
                 confirm_btn =driver .find_element (By .CSS_SELECTOR ,"button[name='confirm'], input[type='submit'][value*='Confirm']")
@@ -247,7 +185,6 @@ def confirm_import_session (session_id :str ,job_id :str ,log_fn :Callable [[str
                     confirm_btn =driver .find_element (By .XPATH ,"//button[contains(., 'Confirm') or contains(., 'Confirmar')]")
                 except Exception :
                     confirm_btn =None 
-
             if not confirm_btn :
                 _safe_log (log_fn ,job_id ,'confirm_import_session: confirm button not found')
                 return False 

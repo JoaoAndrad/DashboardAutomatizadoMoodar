@@ -180,6 +180,14 @@
       const $logs_section = document.getElementById("logs_section");
       const $logs = document.getElementById("logs");
 
+      // Do not attempt to guess or extract ids — prefer the explicit id fields
+      // returned by the search results. This keeps the UI behavior deterministic
+      // and guarantees we send the same id shown to the user.
+      function normalizeParticipantId(p) {
+        if (!p) return '';
+        return (p.patient_id || p.patientId || p.id || p.uid || '') + '';
+      }
+
       function appendLog(text) {
         const now = new Date().toLocaleTimeString();
         $logs.textContent += `[${now}] ${text}\n`;
@@ -191,10 +199,11 @@
         appendLog("Buscando histórico para: " + identifier);
         const sid = document.getElementById("session_selector").value;
         appendLog("Session id detectado: " + (sid || "[nenhuma]"));
-
+        // Request participant candidates for scheduling flow (do not fetch history yet)
         const q =
           "/api/appointments/history?participant=" +
           encodeURIComponent(identifier) +
+          "&for_schedule=true" +
           (sid ? `&browser_session_id=${encodeURIComponent(sid)}` : "");
         let res, data;
         try {
@@ -238,8 +247,12 @@
           return;
         }
 
-        // Prepare participant info and show section
-        const p = window._selectedCandidate || data.participant || data || {};
+  // Prepare participant info and show section
+  const p = window._selectedCandidate || data.participant || data || {};
+  // Use the explicit participant id returned by search (if present). Do not
+  // attempt to infer/transform the id: prefer data.participant_id then cached
+  // selected candidate id, then candidate fields.
+  const participantIdNormalized = (data && data.participant_id) || (p && p._normalized_id) || (p && (p.patient_id || p.patientId || p.id || p.uid)) || '';
         const $cycle_options = document.getElementById('cycle_options');
         // small participant header inside the cycle options area
         const participantInfo = `
@@ -271,7 +284,7 @@
             div.innerHTML = `
               <b>Plano:</b> ${cycle.plan} &nbsp; <b>Terapeuta:</b> ${cycle.therapist} &nbsp; <b>Tipo:</b> ${tipo} &nbsp; <b>Minutagem:</b> ${min} min &nbsp; <b>Ocorrências:</b> ${cycle.matches}
             `;
-            div.onclick = () => showCycleForm(cycle, tipo, min, p, data.participant_id || p.id || p.patient_id || '');
+            div.onclick = () => showCycleForm(cycle, tipo, min, p, participantIdNormalized);
             $cycle_options.appendChild(div);
           });
         }
@@ -295,8 +308,10 @@
         document.getElementById('cycle_form').onsubmit = async function(e) {
           e.preventDefault();
           const form = e.target;
+          // ensure we send the participant id exactly as returned by search
+          let pid = participant_id || (p && p._normalized_id) || (p && (p.patient_id || p.patientId || p.id || p.uid)) || '';
           const payload = {
-            participant_id: participant_id,
+            participant_id: pid,
             participant_name: (p && (p.name || p.patient_name || p.nome)) || '',
             therapist: form.therapist.value,
             plan: form.plan.value,
@@ -344,8 +359,15 @@
           appendLog("Informe um participante");
           return;
         }
-        appendLog("Iniciando busca...");
-        const data = await fetchHistory(val);
+        appendLog("Iniciando busca (candidatos)...");
+        // disable the search button to avoid duplicate requests
+        $search.disabled = true;
+        let data = null;
+        try {
+          data = await fetchHistory(val);
+        } finally {
+          $search.disabled = false;
+        }
         if (!data) return;
 
         if (Array.isArray(data.participants) && data.participants.length > 0) {
@@ -365,27 +387,40 @@
             div.addEventListener("click", async () => {
               // store selected candidate globally so we can reuse the displayed name later
               window._selectedCandidate = p;
+              // cache the participant id exactly as returned by the search results
+              // (do not infer or transform) so scheduling uses the same id shown.
+              try { window._selectedCandidate._normalized_id = (p.patient_id || p.patientId || p.id || p.uid || '') + ''; } catch (e) { window._selectedCandidate._normalized_id = p.id || p.patient_id || ''; }
               appendLog("Selecionado: " + (p.name || p.id || ""));
-              // Busca histórico detalhado pelo id (e nome, se necessário)
-              let params = `participant_id=${encodeURIComponent(p.id)}`;
-              if (p.name) params += `&participant_name=${encodeURIComponent(p.name)}`;
+              // Now fetch the detailed history for the selected candidate.
+              // Use the normalized id (numeric when possible) to request history
+              // so subsequent schedule flow will also use the numeric id.
               const sid = document.getElementById("session_selector").value;
+              let pid = window._selectedCandidate._normalized_id || p.patient_id || p.patientId || p.id || p.uid || '';
+              let params = `participant_id=${encodeURIComponent(pid)}`;
+              if (p.name) params += `&participant_name=${encodeURIComponent(p.name)}`;
               if (sid) params += `&browser_session_id=${encodeURIComponent(sid)}`;
-              appendLog("Buscando histórico detalhado para o participante id: " + p.id);
-              let res, data;
+              appendLog("Buscando histórico detalhado para: " + (p.email || pid));
+              // disable search button while fetching history to avoid duplicate actions
+              $search.disabled = true;
               try {
-                res = await fetch(`/api/appointments/history?${params}`, { credentials: "same-origin" });
-                try { data = await res.json(); } catch { data = null; }
-              } catch (e) {
-                appendLog("Erro ao buscar histórico detalhado: " + e.message);
-                return;
+                let res = null;
+                let data = null;
+                try {
+                  res = await fetch(`/api/appointments/history?${params}`, { credentials: "same-origin" });
+                  try { data = await res.json(); } catch { data = null; }
+                } catch (e) {
+                  appendLog("Erro ao buscar histórico detalhado: " + e.message);
+                  return;
+                }
+                if (!res.ok || !data) {
+                  appendLog("Erro ao buscar histórico detalhado.");
+                  renderHistory(null);
+                  return;
+                }
+                renderHistory(data);
+              } finally {
+                $search.disabled = false;
               }
-              if (!res.ok || !data) {
-                appendLog("Erro ao buscar histórico detalhado.");
-                renderHistory(null);
-                return;
-              }
-              renderHistory(data);
             });
             $candidates_list.appendChild(div);
           });

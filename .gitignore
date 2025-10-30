@@ -1,29 +1,35 @@
-# Byte-compiled / optimized / DLL files
+# Virtual environment
+.venv/
+
+# Python cache
 __pycache__/
 *.py[cod]
-*$py.class
-
-# Distribution / packaging
-build/
-dist/
-*.egg-info/
-
-# Virtualenv
-venv/
-env/
-
-# Pyenv
-.python-version
-
-# Installer logs
-pip-log.txt
-
-# VSCode
-.vscode/
 
 # OS files
-Thumbs.db
-desktop.ini
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
 
-# Docker context
-docker-context/
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyc
+
+# Backup files
+*.bak
+
+# Local caches and large files
+companies_cache_*.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Note: intentionally NOT ignoring .env per user request (it will be committed)
+# If you change your mind, add `.env` to this file.
+
+# Local credential cache and activation state (commented out by default)
+# dv_admin_automator/credenciais
+# dv_admin_automator/state.json

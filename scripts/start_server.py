@@ -1,42 +1,76 @@
-#!/usr/bin/env python3
-"""Cross-platform initializer used by platform-specific starters.
-
-Responsibilities:
-- ensure a .venv exists
-- install requirements.txt into the venv (if present)
-- open the default browser to the app URL (new tab)
-- start uvicorn using the venv python and wait until it exits
-
-This script intentionally avoids platform-specific terminal/window handling; the
-wrappers (`.bat` and `.sh`) should open new terminals if a separate window is
-desired.
-"""
 import sys
 import subprocess
+import time
 from pathlib import Path
 import webbrowser
+import urllib.request
+import urllib.error
 
 ROOT = Path(__file__).resolve().parent.parent
-VENV_PY = ROOT / ".venv" / "Scripts" / "python.exe" if sys.platform.startswith("win") else ROOT / ".venv" / "bin" / "python"
+if sys.platform.startswith("win"):
+    VENV_PY = ROOT / ".venv" / "Scripts" / "python.exe"
+else:
+    VENV_PY = ROOT / ".venv" / "bin" / "python"
+
 URL = "http://127.0.0.1:8000/"
 
 
 def ensure_venv():
     if not VENV_PY.exists():
         print("Creating virtual environment...")
-        subprocess.check_call([sys.executable, "-m", "venv", str(ROOT / ".venv")])
+        try:
+            subprocess.check_call([sys.executable, "-m", "venv", str(ROOT / ".venv")])
+        except subprocess.CalledProcessError as exc:
+            print("Failed to create virtualenv using the current Python executable:", exc)
+            # On Windows try the 'py -3' launcher as a fallback (common when multiple Pythons exist)
+            if sys.platform.startswith("win"):
+                try:
+                    print("Attempting to create venv using 'py -3'...")
+                    subprocess.check_call(["py", "-3", "-m", "venv", str(ROOT / ".venv")])
+                    print("Virtual environment created using 'py -3'.")
+                except FileNotFoundError:
+                    print("'py' launcher not found on PATH. Please ensure Python 3 is installed and available as 'python' or 'py -3'.")
+                    raise
+                except subprocess.CalledProcessError as exc2:
+                    print("Failed to create virtualenv using 'py -3':", exc2)
+                    raise
+            else:
+                raise
 
 
 def install_requirements():
     req = ROOT / "requirements.txt"
     if req.exists():
         print("Installing requirements...")
-        subprocess.check_call([str(VENV_PY), "-m", "pip", "install", "--upgrade", "pip"])
-        subprocess.check_call([str(VENV_PY), "-m", "pip", "install", "-r", str(req)])
+        try:
+            subprocess.check_call([str(VENV_PY), "-m", "pip", "install", "--upgrade", "pip"])
+            subprocess.check_call([str(VENV_PY), "-m", "pip", "install", "-r", str(req)])
+        except subprocess.CalledProcessError as exc:
+            print("pip install failed:", exc)
+            print("Possible actions:")
+            print(f" - Inspect the error above and try running: {str(VENV_PY)} -m pip install -r {str(req)}")
+            print(" - Check network connectivity / proxy settings if downloads fail.")
+            print(" - If SSL errors occur, try upgrading certifi in the venv: ")
+            print(f"   {str(VENV_PY)} -m pip install --upgrade certifi")
+            raise
+
+
+def wait_for_server(url=URL, timeout=10.0, interval=0.5):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=1.0):
+                return True
+        except Exception:
+            time.sleep(interval)
+    return False
 
 
 def open_browser():
     try:
+        ready = wait_for_server()
+        if not ready:
+            print(f"Server did not respond within timeout; opening browser anyway: {URL}")
         webbrowser.open_new_tab(URL)
         print(f"Opened {URL} in default browser (new tab requested)")
     except Exception as e:
@@ -44,9 +78,22 @@ def open_browser():
 
 
 def start_uvicorn():
-    cmd = [str(VENV_PY), "-m", "uvicorn", "dv_admin_automator.ui.web.server:app", "--reload", "--host", "127.0.0.1", "--port", "8000"]
+    env_file = str(ROOT / ".env")
+    cmd = [
+        str(VENV_PY),
+        "-m",
+        "uvicorn",
+        "dv_admin_automator.ui.web.server:app",
+        "--reload",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000",
+        "--env-file",
+        env_file,
+    ]
     print("Starting uvicorn:", " ".join(cmd))
-    proc = subprocess.Popen(cmd)
+    proc = subprocess.Popen(cmd, cwd=str(ROOT))
     try:
         proc.wait()
     except KeyboardInterrupt:
@@ -57,8 +104,29 @@ def start_uvicorn():
 def main():
     ensure_venv()
     install_requirements()
-    open_browser()
-    start_uvicorn()
+    proc = subprocess.Popen([
+        str(VENV_PY),
+        "-m",
+        "uvicorn",
+        "dv_admin_automator.ui.web.server:app",
+        "--reload",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000",
+        "--env-file",
+        str(ROOT / ".env"),
+    ], cwd=str(ROOT))
+    try:
+        if wait_for_server(timeout=8.0):
+            open_browser()
+        else:
+            print("Server did not respond in time; opening browser anyway.")
+            open_browser()
+        proc.wait()
+    except KeyboardInterrupt:
+        proc.terminate()
+        proc.wait()
 
 
 if __name__ == "__main__":

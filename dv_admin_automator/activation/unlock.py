@@ -2,21 +2,15 @@ from typing import Dict
 from .storage import LocalStore 
 from .verify import verify_token 
 import os 
-
-
 class UnlockError (Exception ):
     pass 
-
-
 def unlock_all (store :LocalStore ,master_password :str )->Dict [str ,bytes ]:
-
     store .ensure_dirs ()
     results ={}
     errors ={}
     for p in sorted (store .creds_dir .iterdir ()if store .creds_dir .exists ()else []):
         if not p .is_file ():
             continue 
-
         if p .suffix !='.enc':
             continue 
         name =p .name 
@@ -31,9 +25,6 @@ def unlock_all (store :LocalStore ,master_password :str )->Dict [str ,bytes ]:
             results [name ]=plaintext 
         except Exception as e :
             errors [name ]=str (e )
-
     if errors :
-
         raise UnlockError ({'errors':errors })
-
     return results 

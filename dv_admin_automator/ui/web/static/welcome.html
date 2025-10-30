@@ -8,7 +8,8 @@
       :root{ --bg1: linear-gradient(135deg,#ff9ad1 0%,#7bd1ff 100%); --card-bg: rgba(255,255,255,0.95); --accent-pink:#ff4fa3; --accent-blue:#2ea6ff; --muted:#6b6b7a }
       html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
       body{display:flex;align-items:center;justify-content:center;background:var(--bg1);padding:2rem}
-      .card{width:100%;max-width:900px;background:var(--card-bg);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,0.12);overflow:hidden;display:flex}
+  .card{width:100%;max-width:900px;background:var(--card-bg);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,0.12);overflow:hidden;display:flex}
+  .hidden{display:none !important}
       .left{flex:0 0 320px;padding:28px;background:linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.8));}
       .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent-pink),var(--accent-blue));display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:20px}
       .title{margin-top:12px;font-size:20px;font-weight:700}
@@ -25,7 +26,8 @@
     </style>
   </head>
   <body>
-    <div class="card">
+  <div id="loader" style="width:100%;max-width:900px;text-align:center;color:white;font-weight:700;margin-bottom:18px">Carregando...</div>
+  <div class="card hidden">
       <div class="left">
         <div class="logo">DV</div>
         <div class="title">Automação Dashboard Moodar</div>
@@ -39,6 +41,16 @@
           <input id="username" type="text" placeholder="usuario@example.com" />
           <label for="password" style="margin-top:10px">Senha</label>
           <input id="password" type="password" placeholder="sua senha" />
+            <div id="local_unlock" style="display:none;margin-top:10px;border:1px solid rgba(0,0,0,0.04);padding:10px;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,255,255,0.95))">
+              <div style="font-size:13px;margin-bottom:8px;color:#333;font-weight:600">Credenciais locais detectadas</div>
+              <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Insira sua chave mestre para desbloquear as credenciais locais antes de prosseguir.</div>
+              <input id="local_master_password" type="password" placeholder="Chave mestra (local)" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);width:100%" />
+              <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+                <label style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px"><input id="remember_for_session" type="checkbox" checked /> Lembrar para a sessão</label>
+                <button id="local_unlock_btn" class="btn ghost small" style="margin-left:auto">Desbloquear</button>
+              </div>
+              <div id="local_unlock_msg" style="margin-top:8px;font-size:13px;color:#b33"></div>
+            </div>
           <div style="display:flex;gap:8px;margin-top:12px">
             <button id="login" class="btn primary" aria-busy="false">Entrar <span id="login_spinner" style="display:none" class="spinner"></span></button>
             <a href="/static/activation.html"><button class="btn ghost">Ir para Ativação</button></a>
@@ -49,100 +61,184 @@
     </div>
 
     <script>
-      document.getElementById('login').addEventListener('click', async ()=>{
-        const username = document.getElementById('username').value.trim();
-        const password = document.getElementById('password').value;
-        const msg = document.getElementById('msg');
+      (function(){
         const loginBtn = document.getElementById('login');
         const spinner = document.getElementById('login_spinner');
-        if(!username || !password){ msg.textContent = 'Usuário e senha são obrigatórios'; return; }
-        // disable button and show spinner
-        loginBtn.disabled = true; loginBtn.setAttribute('aria-busy','true'); spinner.style.display = 'inline-block';
-        msg.textContent = 'Iniciando sessão...';
-        try{
-          // Request a visible browser session (headless:false) so the second browser is shown
-          const payload = { username, password, headless: false };
-          const resp = await fetch('/api/login', {method:'POST', credentials: 'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-          if(!resp.ok){ msg.textContent = 'Falha ao iniciar browser: ' + await resp.text(); return; }
-          const j = await resp.json();
-          if(j && j.job_id){
-            // persist last job so dashboard can pick it up
-            try{ localStorage.setItem('last_login_job', j.job_id); }catch(e){}
-            // persist browser_session_id if server provided it so dashboard can detect active session
-            try{ if(j.browser_session_id) localStorage.setItem('browser_session_id', j.browser_session_id); }catch(e){}
-            msg.textContent = 'Login agendado (job: ' + j.job_id + '). Aguardando conclusão...';
-            // poll job status until it finishes or errors
-            const start = Date.now();
-            const timeoutMs = 30_000; // 30s max
-            async function poll(delay = 700){
-              try{
-                const r2 = await fetch('/api/jobs/' + encodeURIComponent(j.job_id), { credentials: 'same-origin' });
-                if(r2.status === 404){ msg.textContent = 'Job não encontrado'; return; }
-                const s = await r2.json();
-                    if(s && s.ok && s.status){
-                      if(s.status.done){
-                        msg.textContent = 'Login finalizado. Finalizando sessão...';
-                        // finalize the pending login on the server so the HTTP
-                        // session is written only when the Django login actually
-                        // succeeded. Call /api/login/complete with the job id.
-                        try{
-                          const fin = await fetch('/api/login/complete', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ job_id: j.job_id }) });
-                          if(!fin.ok){
-                            const txt = await fin.text().catch(()=> 'failed');
-                            msg.textContent = 'Falha ao finalizar sessão: ' + txt; return;
-                          }
-                          // clear stored job id and redirect to dashboard once the
-                          // server-side session or fallback cookie is visible to the
-                          // browser. Polling /api/session ensures the cookie/session
-                          // has been written before navigation, avoiding a stale
-                          // welcome page that requires manual refresh.
-                          try{ localStorage.removeItem('last_login_job'); }catch(e){}
-                          msg.textContent = 'Finalizando sessão e abrindo dashboard...';
-                          const redirectStart = Date.now();
-                          const redirectTimeout = 10000; // ms (increase to 10s)
-                          async function waitForSessionAndRedirect(){
-                            while(Date.now() - redirectStart < redirectTimeout){
-                              try{
-                                const sresp = await fetch('/api/session', { credentials: 'same-origin' });
-                                if(sresp.ok){
-                                  const sj = await sresp.json().catch(()=>null);
-                                  if(sj){
-                                    console.log('session poll response', sj);
-                                    if((sj.session && sj.session.moodar_username) || (sj.cookies && sj.cookies.moodar_logged_in)){
-                                      console.log('Detected session/cookie, redirecting to dashboard');
-                                      window.location.href = '/static/dashboard.html';
-                                      return;
+        const msg = document.getElementById('msg');
+        const localUnlockDiv = document.getElementById('local_unlock');
+        const localUnlockBtn = document.getElementById('local_unlock_btn');
+        const localMasterInput = document.getElementById('local_master_password');
+        const localUnlockMsg = document.getElementById('local_unlock_msg');
+  let localUnlockRequired = false;
+  let localUnlocked = false;
+  let localAttemptsLeft = 5;
+  const card = document.querySelector('.card');
+  const loader = document.getElementById('loader');
+  const rememberCheckbox = document.getElementById('remember_for_session');
+  try{ if(rememberCheckbox) rememberCheckbox.checked = true }catch(e){}
+
+        async function checkLocalCredentials(){
+          try{
+            const resp = await fetch('/api/credentials');
+            if(!resp.ok) return false; // treat as no creds
+            const j = await resp.json().catch(()=>null);
+            const items = (j && (j.credentials || j)) || [];
+            if(Array.isArray(items) && items.length > 0){
+              localUnlockRequired = true;
+              localUnlockDiv.style.display = 'block';
+            }
+          }catch(e){ /* ignore */ }
+          // hide loader and reveal UI after check
+          try{ if(loader) loader.style.display = 'none' }catch(e){}
+          try{ if(card) card.classList.remove('hidden') }catch(e){}
+          return localUnlockRequired;
+        }
+
+        async function attemptLocalUnlock(){
+          const pw = localMasterInput.value || '';
+          if(!pw){ localUnlockMsg.textContent = 'Chave mestra é obrigatória'; return false; }
+          localUnlockMsg.textContent = '';
+          localUnlockBtn.disabled = true;
+          try{
+            const r = await fetch('/api/unlock', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ master_password: pw }) });
+            if(!r.ok){
+              localAttemptsLeft -= 1;
+              let txt = await r.text().catch(()=> 'Falha ao desbloquear');
+              localUnlockMsg.textContent = 'Falha ao desbloquear: ' + txt + (localAttemptsLeft>0 ? (' — ' + localAttemptsLeft + ' tentativas restantes') : ' — bloqueado');
+              return false;
+            }
+            // success
+            localUnlocked = true;
+            localUnlockMsg.style.color = '#0a7';
+            localUnlockMsg.textContent = 'Credenciais desbloqueadas para a sessão.';
+            return true;
+          }catch(e){ localUnlockMsg.textContent = 'Erro ao desbloquear: ' + e.message; return false; }
+          finally{ localUnlockBtn.disabled = false; }
+        }
+
+        localUnlockBtn.addEventListener('click', async ()=>{
+          await attemptLocalUnlock();
+        });
+
+        async function doLogin(){
+          const username = document.getElementById('username').value.trim();
+          const password = document.getElementById('password').value;
+          if(localUnlockRequired && !localUnlocked){
+            // require unlocking first
+            localUnlockMsg.style.color = '#b33';
+            localUnlockMsg.textContent = 'É necessário desbloquear as credenciais locais antes de prosseguir.';
+            return;
+          }
+          if(!username || !password){ msg.textContent = 'Usuário e senha são obrigatórios'; return; }
+          // disable button and show spinner
+          loginBtn.disabled = true; loginBtn.setAttribute('aria-busy','true'); spinner.style.display = 'inline-block';
+          msg.textContent = 'Iniciando sessão...';
+          try{
+            const payload = { username, password, headless: false };
+            const resp = await fetch('/api/login', {method:'POST', credentials: 'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+            if(!resp.ok){ msg.textContent = 'Falha ao iniciar browser: ' + await resp.text(); return; }
+            const j = await resp.json();
+            if(j && j.job_id){
+              try{ localStorage.setItem('last_login_job', j.job_id); }catch(e){}
+              try{ if(j.browser_session_id) localStorage.setItem('browser_session_id', j.browser_session_id); }catch(e){}
+              msg.textContent = 'Login agendado (job: ' + j.job_id + '). Aguardando conclusão...';
+              const start = Date.now();
+              const timeoutMs = 30_000;
+              async function poll(delay = 700){
+                try{
+                  const r2 = await fetch('/api/jobs/' + encodeURIComponent(j.job_id), { credentials: 'same-origin' });
+                  if(r2.status === 404){ msg.textContent = 'Job não encontrado'; return; }
+                  const s = await r2.json();
+                      if(s && s.ok && s.status){
+                        if(s.status.done){
+                          msg.textContent = 'Login finalizado. Finalizando sessão...';
+                          try{
+                            const fin = await fetch('/api/login/complete', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ job_id: j.job_id }) });
+                            if(!fin.ok){
+                              const txt = await fin.text().catch(()=> 'failed');
+                              msg.textContent = 'Falha ao finalizar sessão: ' + txt; return;
+                            }
+                            try{ localStorage.removeItem('last_login_job'); }catch(e){}
+                            msg.textContent = 'Finalizando sessão e abrindo dashboard...';
+                            const redirectStart = Date.now();
+                            const redirectTimeout = 10000;
+                            async function waitForSessionAndRedirect(){
+                              while(Date.now() - redirectStart < redirectTimeout){
+                                try{
+                                  const sresp = await fetch('/api/session', { credentials: 'same-origin' });
+                                  if(sresp.ok){
+                                    const sj = await sresp.json().catch(()=>null);
+                                    if(sj){
+                                      if((sj.session && sj.session.moodar_username) || (sj.cookies && sj.cookies.moodar_logged_in)){
+                                        // prefetch acolhimentos sheet data immediately after login so the dashboard can show data faster
+                                        try{
+                                          await fetch('/api/acolhimentos', { credentials: 'same-origin' });
+                                        }catch(e){ /* ignore prefetch errors */ }
+                                        window.location.href = '/static/dashboard.html';
+                                        return;
+                                      }
                                     }
                                   }
-                                }
-                              }catch(e){ /* ignore and retry */ }
-                              await new Promise(r => setTimeout(r, 300));
+                                }catch(e){}
+                                await new Promise(r => setTimeout(r, 300));
+                              }
+                              window.location.href = '/static/dashboard.html?login=' + Date.now();
                             }
-                            // fallback: redirect anyway, adding a cache-busting query
-                            // parameter to force a fresh navigation which should include
-                            // any cookies set by the server.
-                            console.log('Session poll timed out; redirecting to dashboard with cache-bust');
-                            window.location.href = '/static/dashboard.html?login=' + Date.now();
-                          }
-                          waitForSessionAndRedirect();
-                          return;
-                        }catch(e){ msg.textContent = 'Erro finalizando sessão: ' + e.message; return; }
+                            waitForSessionAndRedirect();
+                            return;
+                          }catch(e){ msg.textContent = 'Erro finalizando sessão: ' + e.message; return; }
+                        }
+                        if(s.status.exception){ msg.textContent = 'Job falhou: ' + s.status.exception; return; }
                       }
-                      if(s.status.exception){
-                        msg.textContent = 'Job falhou: ' + s.status.exception; return; }
-                    }
-              }catch(e){ msg.textContent = 'Erro ao checar job: ' + e.message; }
-              if(Date.now() - start > timeoutMs){ msg.textContent = 'Tempo esgotado esperando o login'; return; }
-              setTimeout(()=> poll(Math.min(3000, delay*1.5)), delay);
+                }catch(e){ msg.textContent = 'Erro ao checar job: ' + e.message; }
+                if(Date.now() - start > timeoutMs){ msg.textContent = 'Tempo esgotado esperando o login'; return; }
+                setTimeout(()=> poll(Math.min(3000, delay*1.5)), delay);
+              }
+              poll();
+            }else{
+              msg.textContent = 'Login iniciado — abrindo Dashboard';
+              setTimeout(()=>{ location.href = '/static/dashboard.html'; }, 900);
             }
-            poll();
-          }else{
-            msg.textContent = 'Login iniciado — abrindo Dashboard';
-            setTimeout(()=>{ location.href = '/static/dashboard.html'; }, 900);
+          }catch(e){ msg.textContent = 'Erro: ' + e.message }
+          finally{ loginBtn.disabled = false; loginBtn.setAttribute('aria-busy','false'); spinner.style.display = 'none'; }
+        }
+
+        // wire login button
+        loginBtn.addEventListener('click', async (ev)=>{
+          // If local credentials exist and are not unlocked, attempt unlock flow first
+          if(localUnlockRequired && !localUnlocked){
+            // attempt unlock; on success proceed automatically
+            const ok = await attemptLocalUnlock();
+            if(ok){
+              // proceed to login
+              await doLogin();
+            }
+            return;
           }
-        }catch(e){ msg.textContent = 'Erro: ' + e.message }
-        finally{ loginBtn.disabled = false; loginBtn.setAttribute('aria-busy','false'); spinner.style.display = 'none'; }
-      });
+          await doLogin();
+        });
+
+        // check for local credentials on load before showing UI
+        document.addEventListener('DOMContentLoaded', async ()=>{
+          await checkLocalCredentials();
+        });
+        document.addEventListener('keydown', async (e) => {
+          try{
+            if (e.key !== 'Enter') return;
+            const active = document.activeElement;
+            if (localUnlockDiv && localUnlockDiv.style.display !== 'none' && active && active.id === 'local_master_password'){
+              e.preventDefault();
+              await attemptLocalUnlock();
+              return;
+            }
+            if (active && (active.id === 'username' || active.id === 'password')){
+              e.preventDefault();
+              await doLogin();
+              return;
+            }
+          }catch(err){ /* ignore */ }
+        });
+      })();
     </script>
   </body>
 </html>

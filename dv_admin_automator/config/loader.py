@@ -1,12 +1,8 @@
 import json 
 from pathlib import Path 
 from typing import Any 
-
 import yaml 
-
 from .schema import RunConfig 
-
-
 def load_config (path :str )->RunConfig :
     p =Path (path )
     if not p .exists ():
@@ -18,7 +14,6 @@ def load_config (path :str )->RunConfig :
     elif p .suffix ==".json":
         data =json .loads (text )
     else :
-
         data =yaml .safe_load (text )
     cfg =RunConfig (**(data or {}))
     return cfg 

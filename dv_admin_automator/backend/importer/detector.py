@@ -2,8 +2,6 @@ from typing import Optional ,Dict ,Any ,List
 import os 
 import csv 
 import re 
-
-
 def _try_read_with_pandas (path :str ):
     try :
         import pandas as pd 
@@ -14,7 +12,6 @@ def _try_read_with_pandas (path :str ):
         if ext in ('.xlsx','.xls'):
             df =pd .read_excel (path )
         elif ext =='.csv':
-
             for enc in ('utf-8','latin-1','cp1252'):
                 try :
                     df =pd .read_csv (path ,encoding =enc )
@@ -28,8 +25,6 @@ def _try_read_with_pandas (path :str ):
         return df 
     except Exception :
         return None 
-
-
 def _read_xlsx_with_openpyxl (path :str ,max_rows :int =20 ):
     try :
         from openpyxl import load_workbook 
@@ -57,8 +52,6 @@ def _read_xlsx_with_openpyxl (path :str ,max_rows :int =20 ):
         return {'columns':header ,'rows':preview_rows }
     except Exception :
         return {'columns':[],'rows':[]}
-
-
 def _fallback_read_preview (path :str ,max_rows :int =20 ):
     rows :List [List [str ]]=[]
     columns :List [str ]=[]
@@ -85,11 +78,8 @@ def _fallback_read_preview (path :str ,max_rows :int =20 ):
         return {'columns':columns ,'rows':preview_rows }
     except Exception :
         return {'columns':[],'rows':[]}
-
-
 def detect_file_type (path :str ,sample_rows :int =20 )->Dict [str ,Any ]:
     result :Dict [str ,Any ]={'type':None ,'candidates':{'cpf':None ,'email':None ,'name':None },'preview':{'columns':[],'rows':[]}}
-
     df =_try_read_with_pandas (path )
     if df is not None :
         try :
@@ -110,14 +100,12 @@ def detect_file_type (path :str ,sample_rows :int =20 )->Dict [str ,Any ]:
                 if not result ['candidates']['name']:
                     if any (len (s .split ())>=2 for s in sample ):
                         result ['candidates']['name']=col 
-
             if result ['candidates']['cpf']and result ['candidates']['name']:
                 result ['type']='cpf'
             elif result ['candidates']['email']:
                 result ['type']='email'
             else :
                 result ['type']=None 
-
             return result 
         except Exception :
             pass 
@@ -147,7 +135,6 @@ def detect_file_type (path :str ,sample_rows :int =20 )->Dict [str ,Any ]:
             return result 
         except ImportError :
             pass 
-
     preview =_fallback_read_preview (path ,max_rows =sample_rows )
     result ['preview']=preview 
     cols =preview .get ('columns',[])
@@ -167,12 +154,10 @@ def detect_file_type (path :str ,sample_rows :int =20 )->Dict [str ,Any ]:
         if not result ['candidates']['name']:
             if any (len (s .split ())>=2 for s in sample [:20 ]):
                 result ['candidates']['name']=col 
-
     if result ['candidates']['cpf']and result ['candidates']['name']:
         result ['type']='cpf'
     elif result ['candidates']['email']:
         result ['type']='email'
     else :
         result ['type']=None 
-
     return result 

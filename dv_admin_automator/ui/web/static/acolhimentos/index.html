@@ -1,0 +1,602 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Acolhimentos — Dashboard</title>
+    <style>
+      :root{ --bg1: linear-gradient(135deg,#ff9ad1 0%,#7bd1ff 100%); --card-bg: rgba(255,255,255,0.95); --accent-pink:#ff4fa3; --accent-blue:#2ea6ff; --muted:#6b6b7a }
+      html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
+      body{display:flex;align-items:flex-start;justify-content:center;background:var(--bg1);padding:1.5rem}
+      .app-wrap{width:100%;max-width:1200px}
+      .topbar{height:56px;background:transparent;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+      /* allow topbar controls to wrap on narrow viewports */
+      .topbar .ops{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+      .topbar .operator{font-size:14px;color:#222}
+      .card{width:100%;background:var(--card-bg);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,0.10);overflow:hidden;display:grid;grid-template-columns:240px 1fr}
+      .nav{padding:18px;background:linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,255,255,0.95));}
+      .logo{width:40px;height:40px;border-radius:8px;background:linear-gradient(135deg,var(--accent-pink),var(--accent-blue));display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
+      .btn{appearance:none;border:0;padding:10px 12px;border-radius:8px;font-weight:600;color:white;cursor:pointer}
+      .btn.primary{background:linear-gradient(90deg,var(--accent-pink),var(--accent-blue))}
+      .section{padding:20px}
+      .muted{color:var(--muted);font-size:13px}
+      .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px}
+      .card-item{background:white;border-radius:10px;padding:14px;box-shadow:0 6px 14px rgba(0,0,0,0.04);display:flex;flex-direction:column;gap:8px}
+      .card-item h3{margin:0;font-size:16px}
+      .card-item p{margin:0;color:var(--muted);font-size:13px}
+      table{width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden}
+      th,td{padding:8px;border-bottom:1px solid #eee;text-align:left;font-size:13px}
+      th{background:#fafafa}
+      .filters{display:flex;gap:8px;margin:12px 0 18px 0;align-items:center;flex-wrap:wrap}
+  .status-em{color:#0a84ff;font-weight:600}
+  .status-finalizado{color:#28a745;font-weight:600}
+  .card-item.clickable{cursor:pointer}
+  .card-item.active{box-shadow:0 8px 20px rgba(0,0,0,0.12);outline:2px solid rgba(46,166,255,0.12)}
+
+      /* Responsive menu: allow buttons to sit side-by-side with wrapping; stack on small screens */
+      .menu{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}
+  .menu button{appearance:none;border:1px solid #e6e6ea;background:transparent;padding:8px 10px;border-radius:8px;font-weight:600;color:#222;cursor:pointer;min-width:120px;flex:0 1 auto}
+  .menu button:hover{box-shadow:0 6px 12px rgba(0,0,0,0.06)}
+
+  /* Disabled button appearance */
+  .btn[disabled]{opacity:0.55;cursor:not-allowed;background:transparent;color:#9aa0a6;border:1px solid #eee}
+  .btn.primary[disabled]{opacity:0.6;filter:grayscale(0.05)}
+
+      /* make menu buttons full width on narrow screens */
+      @media(max-width:700px){
+        .card{grid-template-columns:1fr}
+        .cards{grid-template-columns:1fr}
+        .menu{flex-direction:column;align-items:stretch}
+        .menu button{width:100%;min-width:0}
+        .topbar{padding:8px}
+        .topbar .operator{font-size:12px}
+        .filters{flex-direction:column;align-items:stretch}
+        .filters > *{width:100%}
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-wrap">
+      <div class="topbar">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="logo">DV</div>
+          <div style="font-weight:700">Acolhimentos</div>
+        </div>
+        <div class="ops">
+          <div class="operator muted" id="operator_info">Operador</div>
+          <label style="display:flex;align-items:center;gap:8px;margin-right:12px;color:var(--muted);font-size:13px">
+            <input type="checkbox" id="keepalive_chk" style="transform:scale(1.1)" /> Manter sessão ativa
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="nav">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="logo">DV</div>
+            <div style="font-weight:700">Automação Dashboard</div>
+          </div>
+          <div class="menu" style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+            <button onclick="window.location.href='/static/dashboard.html'">🏠 Voltar</button>
+            <div style="margin-top:8px"></div>
+          </div>
+        </div>
+
+        <div class="main">
+          <div id="content_area" class="section">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div>
+                <h2 style="margin:0">Acolhimentos</h2>
+                <div class="muted">Painel de controle de acolhimentos</div>
+              </div>
+              <div>
+                <button class="btn primary" id="refresh_btn">Atualizar</button>
+              </div>
+            </div>
+
+            <div class="cards" id="cards_area">
+                <div id="card_total_item" class="card-item clickable">
+                  <h3>Total de acolhimentos</h3>
+                  <p id="card_total" style="font-size:20px;font-weight:700">—</p>
+                </div>
+                <div id="card_active_item" class="card-item clickable">
+                  <h3>Em acolhimento</h3>
+                  <p id="card_active" style="font-size:20px;font-weight:700">—</p>
+                </div>
+                <div id="card_finished_item" class="card-item clickable">
+                  <h3>Finalizados</h3>
+                  <p id="card_finished" style="font-size:20px;font-weight:700">—</p>
+                </div>
+            </div>
+
+            <div class="filters" style="margin-top:14px">
+              <input id="search_input" placeholder="Pesquisar por nome/CPF/empresa" style="padding:8px;border-radius:8px;border:1px solid #ddd;flex:1" />
+              <select id="status_filter" style="padding:8px;border-radius:8px;border:1px solid #ddd">
+                <option value="all">Todos os status</option>
+                <option value="Em acolhimento">Em acolhimento</option>
+                <option value="Consulta experimental">Consulta experimental</option>
+                <option value="Finalizado">Finalizado</option>
+                <option value="Pendente">Pendente</option>
+                <option value="Contatado">Contatado</option>
+                <option value="Sem retorno">Sem retorno</option>
+              </select>
+              <select id="company_filter" style="padding:8px;border-radius:8px;border:1px solid #ddd">
+                <option value="all">Todas as empresas</option>
+              </select>
+              <input id="date_from" type="date" style="padding:8px;border-radius:8px;border:1px solid #ddd" title="Data de" />
+              <input id="date_to" type="date" style="padding:8px;border-radius:8px;border:1px solid #ddd" title="Data até" />
+              <select id="bulk_action" style="padding:8px;border-radius:8px;border:1px solid #ddd">
+                <option value="">Ações em massa</option>
+                <option value="set_contatado">Marcar como Contatado</option>
+                <option value="set_em_acol">Marcar como Em acolhimento</option>
+                <option value="set_finalizado">Marcar como Finalizado</option>
+                <option value="export_selected">Exportar selecionados</option>
+              </select>
+              <button id="apply_bulk" class="btn">Aplicar</button>
+              <button id="export_btn" class="btn">Exportar CSV</button>
+              <button id="btn_export_company" class="btn">Exportar relatório por empresa</button>
+            </div>
+
+            <div style="overflow:auto;margin-top:12px">
+              <table id="tbl">
+                <thead>
+                  <tr>
+                    <th style="width:32px"><input type="checkbox" id="select_all" /></th>
+                    <th data-field="request_date" class="sortable">Data</th>
+                    <th data-field="patient_name" class="sortable">Nome</th>
+                    <th data-field="company" class="sortable">Empresa</th>
+                    <th data-field="status" class="sortable">Status</th>
+                    <th data-field="acolhedor" class="sortable">Acolhedor</th>
+                    <th data-field="last_return_rh" class="sortable">Último retorno RH</th>
+                  </tr>
+                </thead>
+                <tbody id="tbl_body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      async function fetchRows(){
+        const start = Date.now();
+        console.group('Acolhimentos: fetchRows start');
+        try{
+          console.log('Request -> GET /api/acolhimentos');
+          const r = await fetch('/api/acolhimentos', {credentials:'same-origin'});
+          console.log('HTTP status:', r.status, r.statusText);
+          if(!r.ok) throw new Error('Falha ao obter dados: HTTP ' + r.status);
+          const j = await r.json();
+          console.log('Response JSON received (raw):', j);
+          if(!j.ok) throw new Error('Resposta inválida (ok !== true)');
+          const rows = j.rows || [];
+          console.log('Decoded rows count:', rows.length);
+          console.log('First row (raw, if present):', rows.length? rows[0] : null);
+          console.log('fetchRows duration (ms):', Date.now() - start);
+          console.groupEnd();
+          return rows;
+        }catch(e){ 
+          console.error('fetchRows error:', e);
+          console.groupEnd();
+          alert('Erro carregando dados: '+e.message); 
+          return []; 
+        }
+      }
+
+      function renderCounts(rows){
+        const total = rows.length;
+        const active = rows.filter(r => ['Em acolhimento','Consulta experimental'].includes(r.status)).length;
+        const finished = rows.filter(r => r.status === 'Finalizado').length;
+        document.getElementById('card_total').textContent = total;
+        document.getElementById('card_active').textContent = active;
+        document.getElementById('card_finished').textContent = finished;
+        console.log('renderCounts -> total:', total, 'active:', active, 'finished:', finished);
+      }
+
+      function renderTable(rows){
+        const tbody = document.getElementById('tbl_body'); tbody.innerHTML='';
+        console.groupCollapsed('renderTable: rendering ' + rows.length + ' rows');
+        for(let i=0;i<rows.length;i++){
+          const r = rows[i];
+          const tr = document.createElement('tr');
+          // checkbox cell
+          const tdCheckbox = document.createElement('td');
+          const cb = document.createElement('input'); cb.type='checkbox'; cb.className='row_checkbox'; cb.dataset.uuid = (r.uuid|| ('row_'+i));
+          try{ if(window.__selectedIds && window.__selectedIds.has(cb.dataset.uuid)) cb.checked = true; }catch(e){}
+          tdCheckbox.appendChild(cb);
+          const tdDate = document.createElement('td'); tdDate.textContent = r.request_date || '';
+          const tdName = document.createElement('td');
+          // create link to detail view
+          const uid = (r.uuid|| ('row_'+i));
+          const a = document.createElement('a');
+          a.href = '/static/acolhimentos/view.html?id=' + encodeURIComponent(uid);
+          a.textContent = r.patient_name || '';
+          a.style.color = 'inherit';
+          a.style.textDecoration = 'underline';
+          a.style.cursor = 'pointer';
+          tdName.appendChild(a);
+          const tdComp = document.createElement('td'); tdComp.textContent = r.company || '';
+          const tdStatus = document.createElement('td'); tdStatus.textContent = r.status || '';
+          if(r.status === 'Em acolhimento' || r.status === 'Consulta experimental') tdStatus.className='status-em';
+          if(r.status === 'Finalizado') tdStatus.className='status-finalizado';
+          const tdAcol = document.createElement('td'); tdAcol.textContent = r.acolhedor || '';
+          const tdLast = document.createElement('td'); tdLast.textContent = r.last_return_rh || '';
+          tr.appendChild(tdCheckbox);
+          tr.appendChild(tdDate); tr.appendChild(tdName); tr.appendChild(tdComp); tr.appendChild(tdStatus); tr.appendChild(tdAcol); tr.appendChild(tdLast);
+          tbody.appendChild(tr);
+        }
+        console.groupEnd();
+      }
+
+      function parseDateString(s){
+        if(!s) return null;
+        s = s.toString().trim();
+        if(!s) return null;
+        // try dd/mm/yyyy
+        if(s.indexOf('/') !== -1){
+          const parts = s.split('/');
+          if(parts.length >= 3){
+            const day = parseInt(parts[0],10); const month = parseInt(parts[1],10)-1; const year = parseInt(parts[2],10);
+            const d = new Date(year, month, day);
+            return isNaN(d.getTime())? null : d;
+          }
+        }
+        // else try ISO / natural parsing
+        const d2 = new Date(s);
+        return isNaN(d2.getTime())? null : d2;
+      }
+
+      function applyFilters(rows){
+        const q = document.getElementById('search_input').value.trim().toLowerCase();
+        const status = document.getElementById('status_filter').value;
+        const company = document.getElementById('company_filter').value;
+        const dateFrom = parseDateString(document.getElementById('date_from').value);
+        const dateTo = parseDateString(document.getElementById('date_to').value);
+        console.log('applyFilters ->', {q, status, company, dateFrom: dateFrom? dateFrom.toISOString():null, dateTo: dateTo? dateTo.toISOString():null});
+        const out = rows.filter(r => {
+          if(status !== 'all' && (r.status||'') !== status) return false;
+          if(company !== 'all' && (r.company||'') !== company) return false;
+          if(q){
+            const found = ((r.patient_name||'').toLowerCase().includes(q)) || ((r.cpf||'') .toString().toLowerCase().includes(q)) || ((r.company||'').toLowerCase().includes(q));
+            if(!found) return false;
+          }
+          if(dateFrom || dateTo){
+            const d = parseDateString(r.request_date);
+            if(!d) return false;
+            if(dateFrom && d < dateFrom) return false;
+            if(dateTo && d > dateTo) return false;
+          }
+          return true;
+        });
+        console.log('applyFilters -> result count:', out.length);
+        return out;
+      }
+
+      (async function(){
+        let rows = await fetchRows();
+        let sortField = null; // e.g. 'patient_name'
+        let sortDir = 1; // 1 asc, -1 desc
+  const selected = new Set();
+  // expose for renderTable to read checkbox state
+  window.__selectedIds = selected;
+
+        function updateCompanyOptions(rows){
+          const sel = document.getElementById('company_filter');
+          const companies = Array.from(new Set(rows.map(r=>r.company||'').filter(x=>x))).sort();
+          sel.innerHTML = '<option value="all">Todas as empresas</option>' + companies.map(c=>`<option value="${c}">${c}</option>`).join('');
+        }
+
+        function sortRows(arr){
+          if(!sortField) return arr;
+          return arr.slice().sort((a,b)=>{
+            const va = (a[sortField]||'').toString();
+            const vb = (b[sortField]||'').toString();
+            if(va === vb) return 0;
+            return va < vb ? -1*sortDir : 1*sortDir;
+          });
+        }
+
+        function renderCountsAndTable(){
+          renderCounts(rows);
+          const filtered = applyFilters(rows);
+          console.log('renderCountsAndTable -> filtered:', filtered.length, 'of', rows.length);
+          const sorted = sortRows(filtered);
+          renderTable(sorted);
+          updateCompanyOptions(rows);
+          try{ updateSelectAllState(); }catch(e){}
+        }
+
+        renderCountsAndTable();
+
+        document.getElementById('refresh_btn').addEventListener('click', async ()=>{
+          rows = await fetchRows(); renderCountsAndTable();
+        });
+
+        // card click handlers
+        function setActiveCard(name){
+          document.querySelectorAll('.card-item').forEach(el=>el.classList.remove('active'));
+          if(name === 'total') document.getElementById('card_total_item').classList.add('active');
+          if(name === 'active') document.getElementById('card_active_item').classList.add('active');
+          if(name === 'finished') document.getElementById('card_finished_item').classList.add('active');
+        }
+        document.getElementById('card_total_item').addEventListener('click', ()=>{
+          document.getElementById('status_filter').value = 'all';
+          document.getElementById('search_input').value = '';
+          setActiveCard('total');
+          renderCountsAndTable();
+        });
+        document.getElementById('card_active_item').addEventListener('click', ()=>{
+          document.getElementById('status_filter').value = 'Em acolhimento';
+          setActiveCard('active');
+          renderCountsAndTable();
+        });
+        document.getElementById('card_finished_item').addEventListener('click', ()=>{
+          document.getElementById('status_filter').value = 'Finalizado';
+          setActiveCard('finished');
+          renderCountsAndTable();
+        });
+
+        document.getElementById('search_input').addEventListener('input', ()=>{ renderCountsAndTable(); });
+        document.getElementById('status_filter').addEventListener('change', ()=>{ setActiveCard(''); renderCountsAndTable(); });
+        document.getElementById('company_filter').addEventListener('change', ()=>{ renderCountsAndTable(); });
+        document.getElementById('date_from').addEventListener('change', ()=>{ renderCountsAndTable(); });
+        document.getElementById('date_to').addEventListener('change', ()=>{ renderCountsAndTable(); });
+
+        // select all
+        document.getElementById('select_all').addEventListener('change', (ev)=>{
+          const checked = ev.target.checked;
+          const boxes = document.querySelectorAll('.row_checkbox');
+          boxes.forEach(b=>{ b.checked = checked; const id = b.dataset.uuid; if(checked) selected.add(id); else selected.delete(id); });
+          updateActionButtons();
+        });
+
+        // bulk action apply
+        document.getElementById('apply_bulk').addEventListener('click', ()=>{
+          const action = document.getElementById('bulk_action').value;
+          if(!action){ alert('Selecione uma ação'); return; }
+          const ids = Array.from(selected);
+          if(ids.length === 0){ alert('Nenhum registro selecionado'); return; }
+          if(action === 'export_selected'){
+            const cols = ['request_date','patient_name','company','status','acolhedor','last_return_rh'];
+            const selectedRows = rows.filter(r=> ids.includes((r.uuid||'').toString()));
+            const csv = [cols.join(',')].concat(selectedRows.map(r=>cols.map(c=> '"'+(r[c]||'')+'"').join(','))).join('\n');
+            const blob = new Blob([csv],{type:'text/csv'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'acolhimentos_selecionados.csv'; document.body.appendChild(a); a.click(); a.remove();
+            return;
+          }
+          // client-side state change for demo: update rows' status
+          const map = { 'set_contatado':'Contatado', 'set_em_acol':'Em acolhimento', 'set_finalizado':'Finalizado' };
+          const newStatus = map[action];
+          rows.forEach(r=>{ if(ids.includes((r.uuid||'').toString())){ r.status = newStatus; } });
+          // clear selections
+          selected.clear(); document.getElementById('select_all').checked = false;
+          renderCountsAndTable();
+          updateActionButtons();
+        });
+
+  // sortable headers
+        document.querySelectorAll('th.sortable').forEach(th=>{
+          th.style.cursor='pointer';
+          th.addEventListener('click', ()=>{
+            const f = th.dataset.field;
+            if(sortField === f) sortDir = -sortDir; else { sortField = f; sortDir = 1; }
+            // visual indicator
+            document.querySelectorAll('th.sortable').forEach(h=> h.textContent = h.textContent.replace(/\s*[▲▼]$/,''));
+            th.textContent = th.textContent + (sortDir===1? ' ▲':' ▼');
+            renderCountsAndTable();
+          });
+        });
+
+        // when table rows are rendered we'll attach checkbox handlers via event delegation
+        const tbody = document.getElementById('tbl_body');
+        tbody.addEventListener('change', (ev)=>{
+          if(ev.target && ev.target.classList && ev.target.classList.contains('row_checkbox')){
+            const id = ev.target.dataset.uuid; if(ev.target.checked) selected.add(id); else selected.delete(id);
+            // update select_all state
+            const allBoxes = document.querySelectorAll('.row_checkbox');
+            const selAll = document.getElementById('select_all');
+            if(allBoxes.length === 0) selAll.checked = false; else selAll.checked = (selected.size === allBoxes.length);
+            updateActionButtons();
+          }
+        });
+
+        // update action button states (visual + disabled)
+        function updateActionButtons(){
+          const applyBtn = document.getElementById('apply_bulk');
+          const exportBtn = document.getElementById('export_btn');
+          const action = document.getElementById('bulk_action').value;
+          const hasAction = action && action !== '';
+          const hasSelection = selected.size > 0;
+          // Apply: enabled only when an action is selected AND at least one row selected
+          applyBtn.disabled = !(hasAction && hasSelection);
+          if(hasAction && hasSelection) applyBtn.classList.add('primary'); else applyBtn.classList.remove('primary');
+          // Export CSV: enabled only when at least one row selected
+          exportBtn.disabled = !hasSelection;
+          if(hasSelection) exportBtn.classList.add('primary'); else exportBtn.classList.remove('primary');
+        }
+
+        // wire bulk_action change to update buttons immediately
+        document.getElementById('bulk_action').addEventListener('change', ()=>{ updateActionButtons(); });
+
+        function updateSelectAllState(){
+          const allBoxes = document.querySelectorAll('.row_checkbox');
+          const selAll = document.getElementById('select_all');
+          if(allBoxes.length === 0) selAll.checked = false; else selAll.checked = (selected.size === allBoxes.length);
+        }
+
+        // export button (exports currently filtered view, but only enabled when rows are selected)
+        document.getElementById('export_btn').addEventListener('click', ()=>{
+          const filtered = applyFilters(rows);
+          const cols = ['request_date','patient_name','company','status','acolhedor','last_return_rh'];
+          const csv = [cols.join(',')].concat(filtered.map(r=>cols.map(c=> '"'+(r[c]||'')+'"').join(','))).join('\n');
+          const blob = new Blob([csv],{type:'text/csv'});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a'); a.href = url; a.download = 'acolhimentos.csv'; document.body.appendChild(a); a.click(); a.remove();
+        });
+
+        // --- Report export modal and handlers ---
+        function _getFilenameFromDisposition(disposition){
+          if(!disposition) return null;
+          const m = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/.exec(disposition);
+          if(m){ return decodeURIComponent(m[1]||m[2]||''); }
+          return null;
+        }
+
+        async function downloadReport(url, params){
+          const qs = new URLSearchParams(params || {}).toString();
+          const full = url + (qs?('?'+qs):'');
+          console.log('downloadReport ->', full);
+          const res = await fetch(full, {credentials:'same-origin'});
+          if(!res.ok){
+            try{ const j = await res.json(); alert('Erro: '+(j.detail||j.message||res.status)); }catch(e){ alert('Erro ao gerar relatório: HTTP '+res.status); }
+            return;
+          }
+          const blob = await res.blob();
+          // try to get filename from header
+          const cd = res.headers.get('Content-Disposition') || res.headers.get('content-disposition');
+          let filename = _getFilenameFromDisposition(cd) || (url.endsWith('/company')? 'Relatorio_Empresa' : 'Relatorio_Geral');
+          // ensure extension from mime
+          if(!/\.[a-zA-Z0-9]+$/.test(filename)){
+            const mt = blob.type || '';
+            if(mt.indexOf('pdf') !== -1) filename += '.pdf'; else filename += '.csv';
+          }
+          const link = document.createElement('a');
+          const obj = URL.createObjectURL(blob);
+          link.href = obj; link.download = filename; document.body.appendChild(link); link.click(); link.remove();
+          setTimeout(()=> URL.revokeObjectURL(obj), 5000);
+        }
+
+        function showReportModal(opts){
+          // opts: {mode: 'company'|'general', defaultCompany: string}
+          const prev = document.getElementById('report_modal'); if(prev) prev.remove();
+          const modal = document.createElement('div'); modal.id='report_modal'; modal.style.position='fixed'; modal.style.left='0'; modal.style.top='0'; modal.style.width='100%'; modal.style.height='100%'; modal.style.background='rgba(0,0,0,0.4)'; modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center'; modal.style.zIndex='9999';
+          const inner = document.createElement('div'); inner.style.width='420px'; inner.style.background='white'; inner.style.borderRadius='8px'; inner.style.padding='18px'; inner.style.boxShadow='0 20px 60px rgba(0,0,0,0.2)';
+          const title = document.createElement('div'); title.style.fontWeight='700'; title.style.marginBottom='8px'; title.textContent = (opts.mode==='company')? 'Exportar relatório por empresa' : 'Exportar relatório geral';
+          inner.appendChild(title);
+
+          // Company selector (only for company mode)
+          let companySel = null;
+          if(opts.mode === 'company'){
+            const lbl = document.createElement('label'); lbl.textContent = 'Empresa'; lbl.style.fontSize='13px'; lbl.style.color='#6b6b7a'; lbl.style.display='block'; lbl.style.marginBottom='6px';
+            companySel = document.createElement('select'); companySel.style.width='100%'; companySel.style.padding='8px'; companySel.style.marginBottom='10px'; companySel.id='report_company_select';
+            // populate from current company_filter options
+            const compEl = document.getElementById('company_filter');
+            if(compEl){
+              // copy options
+              for(const opt of compEl.options){
+                const o = document.createElement('option'); o.value = opt.value; o.textContent = opt.textContent; companySel.appendChild(o);
+              }
+            }
+            if(opts.defaultCompany) companySel.value = opts.defaultCompany;
+            inner.appendChild(lbl); inner.appendChild(companySel);
+          }
+
+          // date inputs
+          const lblFrom = document.createElement('label'); lblFrom.textContent='Data de (opcional)'; lblFrom.style.display='block'; lblFrom.style.marginTop='6px'; lblFrom.style.fontSize='13px'; lblFrom.style.color='#6b6b7a';
+          const inputFrom = document.createElement('input'); inputFrom.type='date'; inputFrom.style.width='100%'; inputFrom.style.padding='8px';
+          const lblTo = document.createElement('label'); lblTo.textContent='Data até (opcional)'; lblTo.style.display='block'; lblTo.style.marginTop='8px'; lblTo.style.fontSize='13px'; lblTo.style.color='#6b6b7a';
+          const inputTo = document.createElement('input'); inputTo.type='date'; inputTo.style.width='100%'; inputTo.style.padding='8px';
+          inner.appendChild(lblFrom); inner.appendChild(inputFrom); inner.appendChild(lblTo); inner.appendChild(inputTo);
+
+          // format selector
+          const lblFmt = document.createElement('label'); lblFmt.textContent='Formato'; lblFmt.style.display='block'; lblFmt.style.marginTop='8px'; lblFmt.style.fontSize='13px'; lblFmt.style.color='#6b6b7a';
+          const selFmt = document.createElement('select'); selFmt.style.width='100%'; selFmt.style.padding='8px'; const o1=document.createElement('option'); o1.value='csv'; o1.textContent='CSV'; const o2=document.createElement('option'); o2.value='pdf'; o2.textContent='PDF'; selFmt.appendChild(o1); selFmt.appendChild(o2);
+          inner.appendChild(lblFmt); inner.appendChild(selFmt);
+
+          // browser execution mode: existing session vs new minimized browser
+          const lblBrowserMode = document.createElement('label'); lblBrowserMode.textContent='Modo de execução (opcional)'; lblBrowserMode.style.display='block'; lblBrowserMode.style.marginTop='8px'; lblBrowserMode.style.fontSize='13px'; lblBrowserMode.style.color='#6b6b7a';
+          inner.appendChild(lblBrowserMode);
+          const modeWrap = document.createElement('div'); modeWrap.style.display='flex'; modeWrap.style.flexDirection='column'; modeWrap.style.gap='6px';
+          const radioExisting = document.createElement('label'); radioExisting.style.fontSize='13px';
+          const inputExisting = document.createElement('input'); inputExisting.type='radio'; inputExisting.name='report_browser_mode'; inputExisting.value='existing'; inputExisting.style.marginRight='8px';
+          radioExisting.appendChild(inputExisting); radioExisting.appendChild(document.createTextNode('Usar navegador aberto (sessão detectada)'));
+          const radioNew = document.createElement('label'); radioNew.style.fontSize='13px';
+          const inputNew = document.createElement('input'); inputNew.type='radio'; inputNew.name='report_browser_mode'; inputNew.value='new_minimized'; inputNew.style.marginRight='8px';
+          radioNew.appendChild(inputNew); radioNew.appendChild(document.createTextNode('Criar novo navegador minimizado para geração'));
+          modeWrap.appendChild(radioExisting); modeWrap.appendChild(radioNew);
+          inner.appendChild(modeWrap);
+
+          // pre-select based on presence of a stored browser session id
+          try{
+            const sid = localStorage.getItem('browser_session_id');
+            if(sid){ inputExisting.checked = true; } else { inputNew.checked = true; }
+          }catch(e){ inputNew.checked = true; }
+
+          const actions = document.createElement('div'); actions.style.display='flex'; actions.style.justifyContent='flex-end'; actions.style.gap='8px'; actions.style.marginTop='12px';
+          const btnCancel = document.createElement('button'); btnCancel.className='btn secondary'; btnCancel.textContent='Fechar'; btnCancel.style.padding='8px 12px';
+          const btnGen = document.createElement('button'); btnGen.className='btn primary'; btnGen.textContent='Gerar'; btnGen.style.padding='8px 12px';
+          actions.appendChild(btnCancel); actions.appendChild(btnGen); inner.appendChild(actions);
+
+          modal.appendChild(inner); document.body.appendChild(modal);
+
+          btnCancel.addEventListener('click', ()=>{ modal.remove(); });
+          btnGen.addEventListener('click', async ()=>{
+            const fmt = selFmt.value || 'csv';
+            const df = inputFrom.value; const dt = inputTo.value;
+            if(opts.mode === 'company'){
+              const companyVal = companySel.value;
+              if(!companyVal || companyVal==='all') { alert('Selecione uma empresa válida'); return; }
+              // call API
+              const params = { company: companyVal, format: fmt };
+              if(df) params.date_from = df;
+              if(dt) params.date_to = dt;
+              // read browser execution mode
+              const mode = document.querySelector('input[name="report_browser_mode"]:checked')?.value || 'existing';
+              if(mode === 'new_minimized'){
+                // prefer async generation when creating a new browser
+                params.async = '1';
+                params.headless = '1';
+              } else {
+                // try to include existing session id if available
+                try{ const sid = localStorage.getItem('browser_session_id'); if(sid) params.browser_session_id = sid; }catch(e){}
+              }
+              // if async requested, call endpoint and show job id; otherwise attempt direct download
+              if(params.async){
+                try{
+                  const q = new URLSearchParams(params).toString();
+                  const res = await fetch('/api/reports/company?'+q, { credentials:'same-origin' });
+                  if(!res.ok){ const t = await res.text().catch(()=>res.statusText); alert('Erro: '+t); return; }
+                  const j = await res.json();
+                  if(j && j.job_id){ alert('Relatório submetido em segundo plano. Job ID: '+j.job_id+' — você pode acompanhar em tmp_uploads/ ou via API de logs.'); }
+                }catch(e){ alert('Erro ao iniciar geração assíncrona: '+e.message); }
+              } else {
+                await downloadReport('/api/reports/company', params);
+              }
+            } else {
+              const params = { format: fmt };
+              if(df) params.date_from = df;
+              if(dt) params.date_to = dt;
+              const mode = document.querySelector('input[name="report_browser_mode"]:checked')?.value || 'existing';
+              if(mode === 'new_minimized'){
+                params.async = '1'; params.headless = '1';
+              } else { try{ const sid = localStorage.getItem('browser_session_id'); if(sid) params.browser_session_id = sid; }catch(e){} }
+              if(params.async){
+                try{
+                  const q = new URLSearchParams(params).toString();
+                  const res = await fetch('/api/reports/general?'+q, { credentials:'same-origin' });
+                  if(!res.ok){ const t = await res.text().catch(()=>res.statusText); alert('Erro: '+t); return; }
+                  const j = await res.json();
+                  if(j && j.job_id){ alert('Relatório submetido em segundo plano. Job ID: '+j.job_id); }
+                }catch(e){ alert('Erro ao iniciar geração assíncrona: '+e.message); }
+              } else {
+                await downloadReport('/api/reports/general', params);
+              }
+            }
+            modal.remove();
+          });
+        }
+
+        // wire the two new buttons
+        const btnCompany = document.getElementById('btn_export_company');
+        if(btnCompany){ 
+          // ensure this button is always enabled and visually active
+          try{ btnCompany.disabled = false; btnCompany.classList.add('primary'); }catch(e){}
+          btnCompany.addEventListener('click', ()=>{ const cur = document.getElementById('company_filter'); const def = cur? cur.value : ''; showReportModal({mode:'company', defaultCompany:def}); });
+        }
+        updateActionButtons();
+      })();
+    </script>
+  </body>
+</html>

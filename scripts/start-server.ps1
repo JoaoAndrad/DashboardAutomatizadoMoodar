@@ -26,57 +26,23 @@ param(
 $root = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location $root
 
-# Ensure .venv exists
-$venvPath = Join-Path $root ".venv"
-$pythonExe = Join-Path $venvPath "Scripts\python.exe"
+Write-Host "Delegating to scripts/start_server.py (centralized starter)."
 
-if (!(Test-Path $pythonExe)) {
-    Write-Host "Creating virtual environment at $venvPath..."
-    python -m venv .venv
-} else {
-    Write-Host "Using existing virtualenv: $venvPath"
-}
-
-# Upgrade pip and install requirements if requested or if requirements changed
-$reqFile = Join-Path $root "requirements.txt"
-if (Test-Path $reqFile) {
-    if ($Install -or -not (Get-Command $pythonExe -ErrorAction SilentlyContinue)) {
-        & $pythonExe -m pip install --upgrade pip
-        & $pythonExe -m pip install -r $reqFile
-    } else {
-        # Try a quick check: if requirements was modified after venv created, offer to install
-        $venvMTime = (Get-Item $venvPath).LastWriteTime
-        $reqMTime = (Get-Item $reqFile).LastWriteTime
-        if ($reqMTime -gt $venvMTime) {
-            Write-Host "requirements.txt is newer than .venv; installing requirements..."
-            & $pythonExe -m pip install --upgrade pip
-            & $pythonExe -m pip install -r $reqFile
-        } else {
-            Write-Host "requirements appear up-to-date. Use -Install to force reinstall."
-        }
+# Try to run the central starter using the active python interpreter. The script
+# will create the venv if necessary and start uvicorn (with --env-file).
+try {
+    if (Get-Command python -ErrorAction SilentlyContinue) {
+        & python (Join-Path $root 'scripts\start_server.py')
     }
-} else {
-    Write-Host "No requirements.txt found at $reqFile. Skipping install step." -ForegroundColor Yellow
+    elseif (Get-Command py -ErrorAction SilentlyContinue) {
+        & py -3 (Join-Path $root 'scripts\start_server.py')
+    }
+    else {
+        Write-Error "No 'python' or 'py' launcher found on PATH. Please install Python 3 and ensure 'python' or 'py' is available."
+        exit 1
+    }
 }
-
-# Start uvicorn in a new background process
-$serverModule = "dv_admin_automator.ui.web.server:app"
-$uvicornArgs = "-m uvicorn $serverModule --reload --host $Host --port $Port --log-level info"
-
-# Build the command that runs using the venv python
-$startCmd = "`"$pythonExe`" -m uvicorn $serverModule --reload --host $Host --port $Port --log-level info"
-
-Write-Host "Starting server: $startCmd"
-# Start-Process so it doesn't block the script
-Start-Process -FilePath $pythonExe -ArgumentList "-m","uvicorn",$serverModule,"--reload","--host",$Host,"--port",$Port,"--log-level","info" -WindowStyle Normal
-
-# Wait a short time for the server to start
-Start-Sleep -Seconds 1
-
-$baseUrl = "http://$Host`:$Port"
-$fullUrl = $baseUrl.TrimEnd('/') + $OpenPath
-
-Write-Host "Opening $fullUrl in default browser..."
-Start-Process $fullUrl
-
-Write-Host "Server start command issued. Uvicorn runs in a separate process. Use task manager to stop it if needed."
+catch {
+    Write-Error "Failed to run scripts/start_server.py: $_"
+    exit 1
+}

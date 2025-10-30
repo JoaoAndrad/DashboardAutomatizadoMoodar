@@ -577,6 +577,8 @@
         startBtn.disabled = true; startBtn.textContent = 'Iniciando...';
         try {
           const payload = { upload_id, company_name, headless, minimized };
+          // include selected company id if available so server uses exact ID
+          if (selected_company_id) payload.company_id = selected_company_id;
           payload.import_type = import_type;
           payload.use_existing_session = use_existing;
           // always include the stored browser session id

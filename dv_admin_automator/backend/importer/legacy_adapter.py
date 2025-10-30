@@ -4,21 +4,14 @@ import re
 import tempfile 
 import traceback 
 from typing import Callable ,Optional ,Dict ,Any 
-
 import pandas as pd 
-
 from ...browser .pool import get_default_pool 
-
 LOG_PREFIX ='[legacy_adapter]'
-
-
 def _safe_log (log_fn :Callable [[str ,str ],None ],job_id :str ,msg :str ):
     try :
         log_fn (job_id ,f"{LOG_PREFIX } {msg }")
     except Exception :
         pass 
-
-
 def read_file_smart (path :str ,log_fn :Callable [[str ,str ],None ],job_id :str )->Optional [pd .DataFrame ]:
     _safe_log (log_fn ,job_id ,f"reading file {os .path .basename (path )}")
     ext =os .path .splitext (path )[1 ].lower ()
@@ -43,34 +36,38 @@ def read_file_smart (path :str ,log_fn :Callable [[str ,str ],None ],job_id :str
     except Exception as e :
         _safe_log (log_fn ,job_id ,f'read_file_smart exception: {e }\n{traceback .format_exc ()}')
         return None 
-
-
 def detect_columns_by_content (df :pd .DataFrame )->Dict [str ,Optional [str ]]:
     def looks_like_cpf (s :str )->bool :
         s =re .sub (r'\D','',str (s ))
         return len (s )==11 
-
     def looks_like_email (s :str )->bool :
         s =str (s )
         return '@'in s and '.'in s 
-
     result :Dict [str ,Optional [str ]]={'cpf':None ,'email':None ,'name':None }
+    headers ={col :str (col ).strip ().lower ()for col in df .columns }
+    for col ,h in headers .items ():
+        if 'cpf'in h and result ['cpf']is None :
+            result ['cpf']=col 
+        if ('email'in h or 'e-mail'in h )and result ['email']is None :
+            result ['email']=col 
+        if ('nome'in h or 'name'in h )and result ['name']is None :
+            result ['name']=col 
     for col in df .columns :
+        if result ['cpf']and result ['email']and result ['name']:
+            break 
         sample =df [col ].dropna ().astype (str ).head (20 )
         if len (sample )==0 :
             continue 
         cpf_count =sum (1 for v in sample if looks_like_cpf (v ))
         email_count =sum (1 for v in sample if looks_like_email (v ))
+        name_count =sum (1 for v in sample if isinstance (v ,str )and len (v .strip ())>2 and ' 'in v .strip ())
         if cpf_count >=max (1 ,len (sample )//3 )and result ['cpf']is None :
             result ['cpf']=col 
         if email_count >=max (1 ,len (sample )//3 )and result ['email']is None :
             result ['email']=col 
-        name_count =sum (1 for v in sample if isinstance (v ,str )and len (v .strip ())>2 and ' 'in v .strip ())
-    if name_count >=1 and result ['name']is None :
+        if name_count >=1 and result ['name']is None :
             result ['name']=col 
     return result 
-
-
 def prepare_base_cpf (df :pd .DataFrame ,cols :Dict [str ,Any ],company_id :str ,log_fn ,job_id :str )->Optional [pd .DataFrame ]:
     try :
         cpf_col =cols .get ('cpf')
@@ -85,11 +82,9 @@ def prepare_base_cpf (df :pd .DataFrame ,cols :Dict [str ,Any ],company_id :str 
         removed =before -len (prepared )
         if removed >0 :
             _safe_log (log_fn ,job_id ,f'prepare_base_cpf: removed {removed } rows with invalid CPF')
-
         def _fmt_cpf (d :str )->str :
             d =str (d )
             return f"{d [:3 ]}.{d [3 :6 ]}.{d [6 :9 ]}-{d [9 :]}"
-
         prepared ['id']=prepared ['id'].apply (lambda x :_fmt_cpf (x ))
         prepared ['name_employee']=df .loc [prepared .index ,name_col ].astype (str ).apply (lambda v :v .strip ())
         prepared ['company']=str (company_id )
@@ -97,15 +92,12 @@ def prepare_base_cpf (df :pd .DataFrame ,cols :Dict [str ,Any ],company_id :str 
         prepared =prepared .drop_duplicates (subset =['id'])
         if len (prepared )!=dedup_before :
             _safe_log (log_fn ,job_id ,f'prepare_base_cpf: dropped {dedup_before -len (prepared )} duplicate CPFs')
-
         prepared =prepared [['company','id','name_employee']]
         _safe_log (log_fn ,job_id ,f'prepared base cpf rows={len (prepared )}')
         return prepared 
     except Exception as e :
         _safe_log (log_fn ,job_id ,f'prepare_base_cpf exception: {e }')
         return None 
-
-
 def prepare_base_email (df :pd .DataFrame ,cols :Dict [str ,Any ],company_id :str ,log_fn ,job_id :str )->Optional [pd .DataFrame ]:
     try :
         email_col =cols .get ('email')
@@ -135,8 +127,6 @@ def prepare_base_email (df :pd .DataFrame ,cols :Dict [str ,Any ],company_id :st
     except Exception as e :
         _safe_log (log_fn ,job_id ,f'prepare_base_email exception: {e }')
         return None 
-
-
 def write_csv_with_fallback (df :pd .DataFrame ,target_path :str ,log_fn ,job_id :str )->Optional [str ]:
     encodings =['utf-8','utf-8-sig','latin-1']
     try :
@@ -161,8 +151,6 @@ def write_csv_with_fallback (df :pd .DataFrame ,target_path :str ,log_fn ,job_id
             except Exception :
                 pass 
     return None 
-
-
 def fetch_companies_map_via_admin (pool ,session_id :Optional [str ],log_fn ,job_id :str )->Dict [str ,str ]:
     out ={}
     manager =None 
@@ -172,7 +160,6 @@ def fetch_companies_map_via_admin (pool ,session_id :Optional [str ],log_fn ,job
         if not manager :
             sid =pool .create_session (headless =False )
             manager =pool .get_manager (sid )
-
         driver =manager .start ()if not getattr (manager ,'driver',None )else manager .driver 
         base ='https://webapp.moodar.com.br/moodashboard/corporate/company/?p='
         page =0 
@@ -215,26 +202,24 @@ def fetch_companies_map_via_admin (pool ,session_id :Optional [str ],log_fn ,job
     except Exception as e :
         _safe_log (log_fn ,job_id ,f'fetch_companies_map exception: {e }\n{traceback .format_exc ()}')
         return out 
-
-
 def run_import_full (upload_path :str ,job_id :str ,log_fn :Callable [[str ,str ],None ],*,
 browser_session_id :Optional [str ]=None ,
 headless :bool =True ,minimized :bool =False ,
 company_name :Optional [str ]=None ,company_id :Optional [str ]=None ,
 import_type :str ='auto')->bool :
-
     pool =get_default_pool ()
     try :
         _safe_log (log_fn ,job_id ,f'starting full import for {os .path .basename (upload_path )}')
-
+        try :
+            _safe_log (log_fn ,job_id ,f'received company_name={company_name !r } company_id={company_id !r }')
+        except Exception :
+            pass 
         df =read_file_smart (upload_path ,log_fn ,job_id )
         if df is None :
             _safe_log (log_fn ,job_id ,'could not read input file')
             return False 
-
         cols =detect_columns_by_content (df )
         _safe_log (log_fn ,job_id ,f'detected columns {cols }')
-
         resolved_company_id =company_id 
         if not resolved_company_id :
             if company_name :
@@ -261,7 +246,6 @@ import_type :str ='auto')->bool :
                             _safe_log (log_fn ,job_id ,f'failed to read legacy cache: {e }')
                 except Exception :
                     pass 
-
                 if not resolved_company_id :
                     mapping =fetch_companies_map_via_admin (pool ,browser_session_id ,log_fn ,job_id )
                     for cid ,nm in mapping .items ():
@@ -276,21 +260,17 @@ import_type :str ='auto')->bool :
         if not resolved_company_id :
             _safe_log (log_fn ,job_id ,'company id not provided and could not be resolved')
             return False 
-
         final_df =None 
         the_type =import_type 
         if the_type =='auto':
             the_type ='cpf'if cols .get ('cpf')and cols .get ('name')else ('email'if cols .get ('email')else 'email')
-
         if the_type =='cpf':
             final_df =prepare_base_cpf (df ,cols ,resolved_company_id ,log_fn ,job_id )
         else :
             final_df =prepare_base_email (df ,cols ,resolved_company_id ,log_fn ,job_id )
-
         if final_df is None or len (final_df )==0 :
             _safe_log (log_fn ,job_id ,'no rows prepared for import')
             return False 
-
         tmp_dir =os .path .join (os .getcwd (),'tmp_uploads')
         os .makedirs (tmp_dir ,exist_ok =True )
         def _sanitize (s :str )->str :
@@ -301,13 +281,11 @@ import_type :str ='auto')->bool :
         if not enc :
             _safe_log (log_fn ,job_id ,'failed to write upload CSV with any encoding')
             return False 
-
         try :
             from .runner import run_import 
         except Exception as e :
             _safe_log (log_fn ,job_id ,f'failed to import runner: {e }')
             return False 
-
         try :
             ok ,awaiting ,sid =run_import (tmp_path ,job_id ,log_fn ,browser_session_id =browser_session_id ,headless =headless ,minimized =minimized ,company_name =(company_name or ''),import_type =the_type ,auto_confirm =False )
             if awaiting :
@@ -343,6 +321,21 @@ import_type :str ='auto')->bool :
                                 pass 
                             return False 
                         _safe_log (log_fn ,job_id ,'operator confirmed import; resuming finalization')
+                        try :
+                            env_val =os .environ .get ('UPDATER_APPLY',os .environ .get ('UPDATER_PLAY','false'))
+                            apply_update =str (env_val ).lower ()in ('1','true','yes')
+                            try :
+                                from .import updater 
+                            except Exception :
+                                updater =None 
+                            if updater :
+                                try :
+                                    res =updater .process_company_update (company_name or '',csv_path =tmp_path ,dry_run =not apply_update )
+                                    _safe_log (log_fn ,job_id ,f'updater result: {res }')
+                                except Exception as e :
+                                    _safe_log (log_fn ,job_id ,f'updater exception: {e }')
+                        except Exception :
+                            pass 
                         return True 
                     except Exception as e :
                         _safe_log (log_fn ,job_id ,f'error after awaiting confirmation: {e }')
@@ -359,7 +352,6 @@ import_type :str ='auto')->bool :
         except Exception as e :
             _safe_log (log_fn ,job_id ,f'runner exception: {e }\n{traceback .format_exc ()}')
             return False 
-
     except Exception as e :
         _safe_log (log_fn ,job_id ,f'exception: {e }\n{traceback .format_exc ()}')
         return False 
