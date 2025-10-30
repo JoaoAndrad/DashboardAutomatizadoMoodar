@@ -1,4 +1,6 @@
 name: Build launcher and publish release
+permissions:
+  contents: write
 
 on:
   push:
@@ -78,6 +80,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Debug: list downloaded artifacts
+        run: |
+          echo "Listing artifacts folder contents for debug"
+          ls -la artifacts || true
+          find artifacts -maxdepth 3 -type f -print || true
 
       - name: Create project zip
         env:
