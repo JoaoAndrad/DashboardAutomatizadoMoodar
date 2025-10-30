@@ -1,0 +1,33 @@
+project_name: moodar-launcher
+
+builds:
+  - id: moodar-launcher
+    binary: moodar-launcher
+    main: ./launcher
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+
+archives:
+  - id: default
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    files:
+      - launcher/icon.ico
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  github:
+    owner: JoaoAndrad
+    name: DashboardAutomatizadoMoodar
+
+changelog:
+  use: git
+# Note: goreleaser will include launcher/icon.png in the archives if present. For
+# embedding an icon into the Windows executable you can generate a .syso file using
+# rsrc (https://github.com/akavel/rsrc) and include it before building on Windows.
