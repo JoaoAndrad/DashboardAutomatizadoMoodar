@@ -34,17 +34,18 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           echo "Building for $GOOS/$GOARCH"
-          if [ "$GOOS" = "windows" ]; then
-            GO_EXT=.exe
-          else
-            GO_EXT=
-          fi
           # Build from inside the launcher module so `go.mod` is found
           pushd launcher
           echo "Ensuring Go modules are downloaded (creates go.sum if needed)"
           go mod tidy
           go mod download
-          GOOS=${GOOS} GOARCH=${GOARCH} go build -ldflags "-s -w" -o ../dist/${GOOS}-${GOARCH}/moodar-launcher${GO_EXT} .
+          # Decide target binary name so long lines don't get wrapped by runners
+          if [ "$GOOS" = "windows" ]; then
+            TARGET_NAME="moodar-launcher.exe"
+          else
+            TARGET_NAME="moodar-launcher"
+          fi
+          GOOS=${GOOS} GOARCH=${GOARCH} go build -ldflags "-s -w" -o ../dist/${GOOS}-${GOARCH}/${TARGET_NAME} .
           popd
 
       - name: Package artifact
@@ -54,13 +55,19 @@ jobs:
           if [ -f ../../launcher/icon.ico ]; then
             cp ../../launcher/icon.ico . || true
           fi
+          # Use the built target filename (avoid long wrapped commands)
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            zip -r moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip moodar-launcher.exe icon.ico || zip -r moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip moodar-launcher.exe
-            sha256sum moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip > moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip.sha256
+            BIN_NAME="moodar-launcher.exe"
           else
-            zip -r moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip moodar-launcher icon.ico || zip -r moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip moodar-launcher
-            sha256sum moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip > moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip.sha256
+            BIN_NAME="moodar-launcher"
           fi
+          # Create zip and sha256
+          if [ -f icon.ico ]; then
+            zip -r moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip "${BIN_NAME}" icon.ico || zip -r moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip "${BIN_NAME}"
+          else
+            zip -r moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip "${BIN_NAME}"
+          fi
+          sha256sum moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip > moodar-launcher-${{ matrix.goos }}-${{ matrix.goarch }}.zip.sha256
           popd
 
       - name: Upload build artifact (per-matrix)
