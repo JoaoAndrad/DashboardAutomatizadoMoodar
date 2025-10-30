@@ -27,6 +27,24 @@ jobs:
         with:
           go-version: "1.20"
 
+      - name: Prepare Go modules (launcher)
+        run: |
+          echo "Preparing Go modules in launcher/"
+          pushd launcher
+          go mod tidy
+          go mod download
+          popd
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('launcher/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
       - name: Prepare dist directory
         run: mkdir -p dist/${{ matrix.goos }}-${{ matrix.goarch }}
 
