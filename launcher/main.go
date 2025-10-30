@@ -451,46 +451,14 @@ func main() {
     }
 
     fmt.Printf("Update applied. Starting project using scripts/start_server.py\n")
-    if err := runStartScript(*project); err != nil {
+    cmd := exec.Command("python", "scripts/start_server.py")
+    // Ensure the start script runs with the project folder as working directory
+    cmd.Dir = *project
+    cmd.Stdout = os.Stdout
+    cmd.Stderr = os.Stderr
+    cmd.Stdin = os.Stdin
+    if err := cmd.Run(); err != nil {
         fmt.Fprintf(os.Stderr, "failed to start project: %v\n", err)
         os.Exit(1)
     }
-}
-
-// runStartScript attempts to run scripts/start_server.py using a set of
-// candidate Python interpreters. This avoids macOS/Unix systems where
-// `python` may point to Python 2 and cause syntax errors for f-strings.
-func runStartScript(project string) error {
-    candidates := [][]string{
-        {"python3", "scripts/start_server.py"},
-        {"python", "scripts/start_server.py"},
-        {"/usr/bin/python3", "scripts/start_server.py"},
-        {"/usr/bin/python", "scripts/start_server.py"},
-        {"py", "-3", "scripts/start_server.py"},
-    }
-
-    for _, cand := range candidates {
-        cmdName := cand[0]
-        args := cand[1:]
-        // On Windows the `py -3` invocation is common. For other commands
-        // we run them directly.
-        cmd := exec.Command(cmdName, args...)
-        cmd.Dir = project
-        cmd.Stdout = os.Stdout
-        cmd.Stderr = os.Stderr
-        cmd.Stdin = os.Stdin
-
-        // Try running; if the executable is missing this returns an exec error,
-        // so we'll try the next candidate.
-        fmt.Printf("Trying to start with: %s %s\n", cmdName, strings.Join(args, " "))
-        if err := cmd.Run(); err != nil {
-            // If the process failed because interpreter is absent or returned
-            // non-zero exit, log and continue to next candidate.
-            fmt.Fprintf(os.Stderr, "launcher: start attempt with '%s' failed: %v\n", cmdName, err)
-            continue
-        }
-        // success
-        return nil
-    }
-    return fmt.Errorf("no suitable python interpreter found to run scripts/start_server.py")
 }

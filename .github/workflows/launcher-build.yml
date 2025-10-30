@@ -27,24 +27,6 @@ jobs:
         with:
           go-version: "1.20"
 
-      - name: Prepare Go modules (launcher)
-        run: |
-          echo "Preparing Go modules in launcher/"
-          pushd launcher
-          go mod tidy
-          go mod download
-          popd
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ hashFiles('launcher/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
       - name: Prepare dist directory
         run: mkdir -p dist/${{ matrix.goos }}-${{ matrix.goarch }}
 
@@ -59,21 +41,6 @@ jobs:
           echo "Ensuring Go modules are ready..."
           go mod tidy
           go mod download
-
-          # If building for Windows, install rsrc and generate rsrc.syso from icon.ico
-          if [ "$GOOS" = "windows" ]; then
-            echo "Installing rsrc to generate Windows icon resource..."
-            go install github.com/akavel/rsrc@latest
-            # ensure GOPATH/bin is on PATH for this step
-            export PATH="$(go env GOPATH)/bin:$PATH"
-            if [ -f "icon.ico" ]; then
-              echo "Generating rsrc.syso from launcher/icon.ico"
-              # run rsrc inside launcher dir; output rsrc.syso next to sources
-              rsrc -ico icon.ico -o rsrc.syso || (echo "rsrc generation failed"; exit 1)
-            else
-              echo "launcher/icon.ico not found; skipping rsrc generation"
-            fi
-          fi
 
           if [ "$GOOS" = "windows" ]; then
             TARGET_NAME="moodar-launcher.exe"
