@@ -120,6 +120,180 @@ func unzip(src, dest string) error {
     return nil
 }
 
+func pathExists(p string) bool {
+    _, err := os.Stat(p)
+    return err == nil
+}
+
+func isDir(p string) bool {
+    fi, err := os.Stat(p)
+    if err != nil {
+        return false
+    }
+    return fi.IsDir()
+}
+
+// Heuristic: check whether a directory looks like the project by looking for
+// known files or folders (requirements.txt, scripts/start_server.py, dv_admin_automator)
+func hasProjectIndicators(p string) bool {
+    if !pathExists(p) || !isDir(p) {
+        return false
+    }
+    indicators := []string{
+        "requirements.txt",
+        "scripts/start_server.py",
+        "dv_admin_automator",
+    }
+    for _, ind := range indicators {
+        if pathExists(filepath.Join(p, ind)) {
+            return true
+        }
+    }
+    return false
+}
+
+func copyFile(src, dst string) error {
+    in, err := os.Open(src)
+    if err != nil {
+        return err
+    }
+    defer in.Close()
+    if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+        return err
+    }
+    out, err := os.Create(dst)
+    if err != nil {
+        return err
+    }
+    defer out.Close()
+    if _, err := io.Copy(out, in); err != nil {
+        return err
+    }
+    if fi, err := os.Stat(src); err == nil {
+        _ = os.Chmod(dst, fi.Mode())
+    }
+    return nil
+}
+
+func copyDir(srcDir, dstDir string) error {
+    entries, err := ioutil.ReadDir(srcDir)
+    if err != nil {
+        return err
+    }
+    for _, e := range entries {
+        srcPath := filepath.Join(srcDir, e.Name())
+        dstPath := filepath.Join(dstDir, e.Name())
+        if e.IsDir() {
+            if err := copyDir(srcPath, dstPath); err != nil {
+                return err
+            }
+        } else {
+            if err := copyFile(srcPath, dstPath); err != nil {
+                return err
+            }
+        }
+    }
+    return nil
+}
+
+// moveContents moves the contents of srcDir into dstDir (creates dstDir if needed)
+func moveContents(srcDir, dstDir string) error {
+    if err := os.MkdirAll(dstDir, 0o755); err != nil {
+        return err
+    }
+    entries, err := ioutil.ReadDir(srcDir)
+    if err != nil {
+        return err
+    }
+    for _, e := range entries {
+        srcPath := filepath.Join(srcDir, e.Name())
+        dstPath := filepath.Join(dstDir, e.Name())
+        // try rename first
+        if err := os.Rename(srcPath, dstPath); err == nil {
+            continue
+        }
+        // fallback to copy
+        if e.IsDir() {
+            if err := copyDir(srcPath, dstPath); err != nil {
+                return err
+            }
+        } else {
+            if err := copyFile(srcPath, dstPath); err != nil {
+                return err
+            }
+        }
+    }
+    return nil
+}
+
+// getUserDocumentsDir returns the user's Documents directory.
+// On most systems this is $HOME/Documents. We keep it simple and fallback to the home dir.
+func getUserDocumentsDir() string {
+    if h, err := os.UserHomeDir(); err == nil {
+        docs := filepath.Join(h, "Documents")
+        if pathExists(docs) {
+            return docs
+        }
+        // fallback to home
+        return h
+    }
+    // as a last resort, use current directory
+    return "."
+}
+
+// ensureResidentLauncher makes sure a copy of the current executable exists in
+// Documents/Moodinho as "moodinho-launcher" (+ extension) and, if the running
+// executable is not the resident one, starts the resident launcher with the
+// same args and exits the current process after the resident finishes.
+func ensureResidentLauncher() {
+    exePath, err := os.Executable()
+    if err != nil {
+        // cannot determine executable; continue without resident delegation
+        return
+    }
+    exePath, _ = filepath.Abs(exePath)
+
+    docs := getUserDocumentsDir()
+    moodinhoDir := filepath.Join(docs, "Moodinho")
+    if err := os.MkdirAll(moodinhoDir, 0o755); err != nil {
+        // if we can't create the dir, skip resident install
+        return
+    }
+
+    ext := filepath.Ext(exePath)
+    residentName := "moodinho-launcher" + ext
+    residentPath := filepath.Join(moodinhoDir, residentName)
+
+    // If current executable is already the resident, nothing to do
+    curClean, _ := filepath.Abs(exePath)
+    resClean, _ := filepath.Abs(residentPath)
+    if strings.EqualFold(curClean, resClean) {
+        return
+    }
+
+    // Copy the exe to resident location if missing or differs (we keep it simple and overwrite)
+    if err := copyFile(exePath, residentPath); err != nil {
+        // failed to copy: skip delegation
+        return
+    }
+    // Ensure executable bit on non-Windows
+    _ = os.Chmod(residentPath, 0o755)
+
+    // Start resident launcher with the same args and proxy IO; wait for it to finish
+    args := os.Args[1:]
+    cmd := exec.Command(residentPath, args...)
+    cmd.Stdout = os.Stdout
+    cmd.Stderr = os.Stderr
+    cmd.Stdin = os.Stdin
+    if err := cmd.Run(); err != nil {
+        // If resident failed, propagate error code
+        fmt.Fprintf(os.Stderr, "resident launcher failed: %v\n", err)
+        os.Exit(1)
+    }
+    // On success, exit current process. The resident launcher performed the work.
+    os.Exit(0)
+}
+
 func main() {
     owner := flag.String("owner", "JoaoAndrad", "GitHub owner/user")
     repo := flag.String("repo", "DashboardAutomatizadoMoodar", "GitHub repo name")
@@ -127,6 +301,9 @@ func main() {
     assetPrefix := flag.String("asset", "project-", "Asset name prefix to look for in the release (zip)")
     auto := flag.Bool("auto", false, "Apply update automatically (no prompt)")
     flag.Parse()
+
+    // Ensure there's a resident launcher in Documents\Moodinho and delegate to it
+    ensureResidentLauncher()
 
     apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", *owner, *repo)
     fmt.Printf("Launcher: checking releases for %s/%s...\n", *owner, *repo)
@@ -209,30 +386,50 @@ func main() {
         }
     }
 
-    // Move current project to backup
-    if _, err := os.Stat(*project); err == nil {
-        fmt.Printf("Creating backup: %s\n", backupDir)
-        if err := os.RemoveAll(backupDir); err != nil {
-            fmt.Fprintf(os.Stderr, "failed removing old backup: %v\n", err)
+    // Decide how to install the extracted files.
+    // If the project path doesn't exist, rename extract -> project path.
+    // If the project path exists and looks like a full project (indicators),
+    // create a backup and replace it. If the project path exists but does NOT
+    // look like a project (e.g. only has the launcher binary), move the
+    // extracted contents into the existing directory so the launcher can
+    // bootstrap itself in an empty folder.
+    if !pathExists(*project) {
+        if err := os.Rename(extractDir, *project); err != nil {
+            fmt.Fprintf(os.Stderr, "failed to move new project into place: %v\n", err)
             os.Exit(1)
         }
-        if err := os.Rename(*project, backupDir); err != nil {
-            fmt.Fprintf(os.Stderr, "failed to create backup: %v\n", err)
-            os.Exit(1)
+    } else {
+        // project path exists
+        if hasProjectIndicators(*project) {
+            fmt.Printf("Creating backup: %s\n", backupDir)
+            if err := os.RemoveAll(backupDir); err != nil {
+                fmt.Fprintf(os.Stderr, "failed removing old backup: %v\n", err)
+                os.Exit(1)
+            }
+            if err := os.Rename(*project, backupDir); err != nil {
+                fmt.Fprintf(os.Stderr, "failed to create backup: %v\n", err)
+                os.Exit(1)
+            }
+            if err := os.Rename(extractDir, *project); err != nil {
+                fmt.Fprintf(os.Stderr, "failed to move new project into place: %v\n", err)
+                // Attempt rollback
+                fmt.Fprintf(os.Stderr, "attempting rollback...\n")
+                _ = os.Rename(backupDir, *project)
+                os.Exit(1)
+            }
+        } else {
+            // existing folder but no project indicators: merge contents
+            if err := moveContents(extractDir, *project); err != nil {
+                fmt.Fprintf(os.Stderr, "failed to install files into existing directory: %v\n", err)
+                os.Exit(1)
+            }
         }
-    }
-
-    // Move extracted to project path
-    if err := os.Rename(extractDir, *project); err != nil {
-        fmt.Fprintf(os.Stderr, "failed to move new project into place: %v\n", err)
-        // Attempt rollback
-        fmt.Fprintf(os.Stderr, "attempting rollback...\n")
-        _ = os.Rename(backupDir, *project)
-        os.Exit(1)
     }
 
     fmt.Printf("Update applied. Starting project using scripts/start_server.py\n")
     cmd := exec.Command("python", "scripts/start_server.py")
+    // Ensure the start script runs with the project folder as working directory
+    cmd.Dir = *project
     cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
     cmd.Stdin = os.Stdin
