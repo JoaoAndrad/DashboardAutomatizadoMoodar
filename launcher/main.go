@@ -53,86 +53,106 @@ func downloadFile(dest, url string) error {
         return err
     }
     defer f.Close()
-    extractDir := filepath.Join(tmpDir, "extract")
-    if err := unzip(zipPath, extractDir); err != nil {
-        fmt.Fprintf(os.Stderr, "falha ao extrair o pacote: %v\n", err)
-        os.Exit(1)
-    }
+    _, err = io.Copy(f, resp.Body)
+    return err
+}
 
-    fmt.Printf("Arquivos preparados em %s\n", extractDir)
-
-    // Determine currently applied tag (if any) and skip update when identical
-    currentTagFile := filepath.Join(*project, ".moodinho_release")
-    currentTag := ""
-    if pathExists(currentTagFile) {
-        if b, err := ioutil.ReadFile(currentTagFile); err == nil {
-            currentTag = strings.TrimSpace(string(b))
+func findAsset(assets []releaseAsset, prefix string) *releaseAsset {
+    for _, a := range assets {
+        if strings.HasPrefix(a.Name, prefix) {
+            return &a
         }
     }
+    return nil
+}
 
-    if currentTag == rel.TagName {
-        fmt.Printf("Nenhuma atualização: já está na tag %s. Iniciando o projeto...\n", rel.TagName)
-    } else {
-        fmt.Printf("Atualização disponível (%s). Aplicando agora...\n", rel.TagName)
-
-        // Ensure project directory exists
-        if !pathExists(*project) {
-            if err := os.Rename(extractDir, *project); err != nil {
-                fmt.Fprintf(os.Stderr, "falha ao mover o novo projeto para o local: %v\n", err)
-                os.Exit(1)
-            }
-        } else {
-            // Preserve .venv if present by moving it to temp
-            venvPath := filepath.Join(*project, ".venv")
-            var venvBackupPath string
-            if pathExists(venvPath) {
-                venvBackupPath = filepath.Join(tmpDir, "venv-backup")
-                _ = os.RemoveAll(venvBackupPath)
-                if err := os.Rename(venvPath, venvBackupPath); err != nil {
-                    if err := moveContents(venvPath, venvBackupPath); err != nil {
-                        fmt.Fprintf(os.Stderr, "falha ao preservar o venv existente: %v\n", err)
-                        os.Exit(1)
-                    }
-                }
-            }
-
-            // Remove everything in project (we'll restore .venv later)
-            entries, err := ioutil.ReadDir(*project)
-            if err != nil {
-                fmt.Fprintf(os.Stderr, "falha ao listar o diretório do projeto: %v\n", err)
-                os.Exit(1)
-            }
-            for _, e := range entries {
-                _ = os.RemoveAll(filepath.Join(*project, e.Name()))
-            }
-
-            // Move extracted contents into project
-            if err := moveContents(extractDir, *project); err != nil {
-                fmt.Fprintf(os.Stderr, "falha ao instalar arquivos no projeto: %v\n", err)
-                // attempt to restore venv backup
-                if venvBackupPath != "" {
-                    _ = os.Rename(venvBackupPath, venvPath)
-                }
-                os.Exit(1)
-            }
-
-            // Restore preserved venv
-            if venvBackupPath != "" {
-                target := filepath.Join(*project, ".venv")
-                _ = os.RemoveAll(target)
-                if err := os.Rename(venvBackupPath, target); err != nil {
-                    if err := moveContents(venvBackupPath, target); err != nil {
-                        fmt.Fprintf(os.Stderr, "aviso: falha ao restaurar venv no novo projeto: %v\n", err)
-                    }
-                    _ = os.RemoveAll(venvBackupPath)
-                }
-            }
-        }
-
-        // Record applied release tag (best-effort)
-        _ = ioutil.WriteFile(currentTagFile, []byte(rel.TagName), 0o644)
-        fmt.Printf("Atualização %s aplicada com sucesso.\n", rel.TagName)
+func verifySha256(filePath, expectedHex string) error {
+    f, err := os.Open(filePath)
+    if err != nil {
+        return err
     }
+    defer f.Close()
+    h := sha256.New()
+    if _, err := io.Copy(h, f); err != nil {
+        return err
+    }
+    got := hex.EncodeToString(h.Sum(nil))
+    if !strings.EqualFold(got, strings.TrimSpace(expectedHex)) {
+        return fmt.Errorf("sha256 mismatch: got %s expected %s", got, expectedHex)
+    }
+    return nil
+}
+
+func unzip(src, dest string) error {
+    r, err := zip.OpenReader(src)
+    if err != nil {
+        return err
+    }
+    defer r.Close()
+
+    for _, f := range r.File {
+        fp := filepath.Join(dest, f.Name)
+        if f.FileInfo().IsDir() {
+            if err := os.MkdirAll(fp, 0o755); err != nil {
+                return err
+            }
+            continue
+        }
+        if err := os.MkdirAll(filepath.Dir(fp), 0o755); err != nil {
+            return err
+        }
+        out, err := os.OpenFile(fp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+        if err != nil {
+            return err
+        }
+        rc, err := f.Open()
+        if err != nil {
+            out.Close()
+            return err
+        }
+        _, err = io.Copy(out, rc)
+        out.Close()
+        rc.Close()
+        if err != nil {
+            return err
+        }
+    }
+    return nil
+}
+
+func pathExists(p string) bool {
+    _, err := os.Stat(p)
+    return err == nil
+}
+
+func isDir(p string) bool {
+    fi, err := os.Stat(p)
+    if err != nil {
+        return false
+    }
+    return fi.IsDir()
+}
+
+func hasProjectIndicators(p string) bool {
+    if !pathExists(p) || !isDir(p) {
+        return false
+    }
+    indicators := []string{
+        "requirements.txt",
+        "scripts/start_server.py",
+        "dv_admin_automator",
+    }
+    for _, ind := range indicators {
+        if pathExists(filepath.Join(p, ind)) {
+            return true
+        }
+    }
+    return false
+}
+
+func copyFile(src, dst string) error {
+    in, err := os.Open(src)
+    if err != nil {
         return err
     }
     defer in.Close()

@@ -188,8 +188,8 @@ def _generate_pdf_bytes (per_patient :List [Dict ],summary :Dict ,title :str )->
     styles =getSampleStyleSheet ()
     COLORS ={
     "light_gray":colors .HexColor ("#f5f5f5"),
-    "blue":colors .HexColor ("#cfe2f3"),
-    "pink":colors .HexColor ("#fbcfe8"),
+    "blue":colors .HexColor ("#2FC5F1"),
+    "pink":colors .HexColor ("#ED6376"),
     "muted":colors .HexColor ("#6b6b7a"),
     "border":colors .HexColor ("#e9edf2"),
     "text_dark":colors .HexColor ("#102a43"),

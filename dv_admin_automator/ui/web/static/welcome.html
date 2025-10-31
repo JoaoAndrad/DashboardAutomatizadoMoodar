@@ -3,7 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DV Admin Automator — Welcome</title>
+  <title>Moodinho — Bem-vindo</title>
+  <!-- Favicon / icons for tabs -->
+  <link rel="icon" type="image/png" href="moodinho_icon.png" />
+  <link rel="apple-touch-icon" href="moodinho_icon.png" />
     <style>
       :root{ --bg1: linear-gradient(135deg,#ff9ad1 0%,#7bd1ff 100%); --card-bg: rgba(255,255,255,0.95); --accent-pink:#ff4fa3; --accent-blue:#2ea6ff; --muted:#6b6b7a }
       html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
@@ -11,7 +14,8 @@
   .card{width:100%;max-width:900px;background:var(--card-bg);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,0.12);overflow:hidden;display:flex}
   .hidden{display:none !important}
       .left{flex:0 0 320px;padding:28px;background:linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.8));}
-      .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent-pink),var(--accent-blue));display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:20px}
+  .logo{width:64px;height:64px;border-radius:12px;background:linear-gradient(135deg,var(--accent-pink),var(--accent-blue));display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:20px}
+  .logo img{width:100%;height:100%;object-fit:contain;border-radius:10px}
       .title{margin-top:12px;font-size:20px;font-weight:700}
       .lead{color:var(--muted);margin-top:8px;font-size:13px}
       .right{flex:1;padding:28px}
@@ -29,15 +33,15 @@
   <div id="loader" style="width:100%;max-width:900px;text-align:center;color:white;font-weight:700;margin-bottom:18px">Carregando...</div>
   <div class="card hidden">
       <div class="left">
-        <div class="logo">DV</div>
-        <div class="title">Automação Dashboard Moodar</div>
-        <div class="lead">Protótipo para ativação segura e automação do Django Admin.</div>
-        <div style="margin-top:18px;font-size:13px;color:var(--muted)">Use uma conta de operador para solicitar ativação. Em desenvolvimento use o servidor local.</div>
+  <div class="logo"><img src="moodinho_icon.png" alt="Moodinho" /></div>
+  <div class="title">Olá — eu sou o Moodinho</div>
+  <div class="lead">Prazer em conhecer você! Eu sou o Moodinho, seu assistente de automação da Moodar.</div>
+  <div style="margin-top:18px;font-size:13px;color:var(--muted)">Ah, é importante usar uma conta ativa de administrador do Django, ok?.</div>
       </div>
       <div class="right">
         <h2>Bem-vindo</h2>
         <div class="form">
-          <label for="username">Nome de usuário / e-mail</label>
+          <label for="username">Nome de usuário</label>
           <input id="username" type="text" placeholder="usuario@example.com" />
           <label for="password" style="margin-top:10px">Senha</label>
           <input id="password" type="password" placeholder="sua senha" />
@@ -53,7 +57,7 @@
             </div>
           <div style="display:flex;gap:8px;margin-top:12px">
             <button id="login" class="btn primary" aria-busy="false">Entrar <span id="login_spinner" style="display:none" class="spinner"></span></button>
-            <a href="/static/activation.html"><button class="btn ghost">Ir para Ativação</button></a>
+            <a id="goto_activation" href="/static/activation.html"><button id="activation_btn" class="btn ghost">Ir para Ativação</button></a>
           </div>
           <div id="msg" style="margin-top:12px;color:var(--muted);font-size:13px"></div>
         </div>
@@ -80,18 +84,47 @@
         async function checkLocalCredentials(){
           try{
             const resp = await fetch('/api/credentials');
-            if(!resp.ok) return false; // treat as no creds
+            if(!resp.ok){
+              // no credentials endpoint or none found
+              showActivationFirst();
+              return false;
+            }
             const j = await resp.json().catch(()=>null);
             const items = (j && (j.credentials || j)) || [];
             if(Array.isArray(items) && items.length > 0){
+              // local credentials exist: require unlock before allowing login
               localUnlockRequired = true;
               localUnlockDiv.style.display = 'block';
+            } else {
+              // no credentials: force user to go to activation first
+              showActivationFirst();
+              return false;
             }
-          }catch(e){ /* ignore */ }
-          // hide loader and reveal UI after check
+          }catch(e){
+            // network or other error: be conservative and require activation
+            showActivationFirst();
+            return false;
+          } finally {
+            // hide loader and reveal UI after check
+            try{ if(loader) loader.style.display = 'none' }catch(e){}
+            try{ if(card) card.classList.remove('hidden') }catch(e){}
+          }
+          return localUnlockRequired;
+        }
+
+        function showActivationFirst(){
           try{ if(loader) loader.style.display = 'none' }catch(e){}
           try{ if(card) card.classList.remove('hidden') }catch(e){}
-          return localUnlockRequired;
+          const usernameInput = document.getElementById('username');
+          const passwordInput = document.getElementById('password');
+          const loginBtnEl = document.getElementById('login');
+          const activationBtn = document.getElementById('activation_btn');
+          const msgEl = document.getElementById('msg');
+          if(usernameInput) usernameInput.disabled = true;
+          if(passwordInput) passwordInput.disabled = true;
+          if(loginBtnEl){ loginBtnEl.disabled = true; loginBtnEl.style.display = 'none'; }
+          if(activationBtn){ activationBtn.classList.remove('ghost'); activationBtn.classList.add('primary'); activationBtn.focus(); }
+          if(msgEl) msgEl.textContent = 'Nenhuma credencial local detectada. Por favor, vá para a página de Ativação primeiro.';
         }
 
         async function attemptLocalUnlock(){
