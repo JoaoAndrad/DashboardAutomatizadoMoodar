@@ -53,108 +53,86 @@ func downloadFile(dest, url string) error {
         return err
     }
     defer f.Close()
-    _, err = io.Copy(f, resp.Body)
-    return err
-}
+    extractDir := filepath.Join(tmpDir, "extract")
+    if err := unzip(zipPath, extractDir); err != nil {
+        fmt.Fprintf(os.Stderr, "falha ao extrair o pacote: %v\n", err)
+        os.Exit(1)
+    }
 
-func findAsset(assets []releaseAsset, prefix string) *releaseAsset {
-    for _, a := range assets {
-        if strings.HasPrefix(a.Name, prefix) {
-            return &a
+    fmt.Printf("Arquivos preparados em %s\n", extractDir)
+
+    // Determine currently applied tag (if any) and skip update when identical
+    currentTagFile := filepath.Join(*project, ".moodinho_release")
+    currentTag := ""
+    if pathExists(currentTagFile) {
+        if b, err := ioutil.ReadFile(currentTagFile); err == nil {
+            currentTag = strings.TrimSpace(string(b))
         }
     }
-    return nil
-}
 
-func verifySha256(filePath, expectedHex string) error {
-    f, err := os.Open(filePath)
-    if err != nil {
-        return err
-    }
-    defer f.Close()
-    h := sha256.New()
-    if _, err := io.Copy(h, f); err != nil {
-        return err
-    }
-    got := hex.EncodeToString(h.Sum(nil))
-    if !strings.EqualFold(got, strings.TrimSpace(expectedHex)) {
-        return fmt.Errorf("sha256 mismatch: got %s expected %s", got, expectedHex)
-    }
-    return nil
-}
+    if currentTag == rel.TagName {
+        fmt.Printf("Nenhuma atualização: já está na tag %s. Iniciando o projeto...\n", rel.TagName)
+    } else {
+        fmt.Printf("Atualização disponível (%s). Aplicando agora...\n", rel.TagName)
 
-func unzip(src, dest string) error {
-    r, err := zip.OpenReader(src)
-    if err != nil {
-        return err
-    }
-    defer r.Close()
-
-    for _, f := range r.File {
-        fp := filepath.Join(dest, f.Name)
-        if f.FileInfo().IsDir() {
-            if err := os.MkdirAll(fp, 0o755); err != nil {
-                return err
+        // Ensure project directory exists
+        if !pathExists(*project) {
+            if err := os.Rename(extractDir, *project); err != nil {
+                fmt.Fprintf(os.Stderr, "falha ao mover o novo projeto para o local: %v\n", err)
+                os.Exit(1)
             }
-            continue
-        }
-        if err := os.MkdirAll(filepath.Dir(fp), 0o755); err != nil {
-            return err
-        }
-        out, err := os.OpenFile(fp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
-        if err != nil {
-            return err
-        }
-        rc, err := f.Open()
-        if err != nil {
-            out.Close()
-            return err
-        }
-        _, err = io.Copy(out, rc)
-        out.Close()
-        rc.Close()
-        if err != nil {
-            return err
-        }
-    }
-    return nil
-}
+        } else {
+            // Preserve .venv if present by moving it to temp
+            venvPath := filepath.Join(*project, ".venv")
+            var venvBackupPath string
+            if pathExists(venvPath) {
+                venvBackupPath = filepath.Join(tmpDir, "venv-backup")
+                _ = os.RemoveAll(venvBackupPath)
+                if err := os.Rename(venvPath, venvBackupPath); err != nil {
+                    if err := moveContents(venvPath, venvBackupPath); err != nil {
+                        fmt.Fprintf(os.Stderr, "falha ao preservar o venv existente: %v\n", err)
+                        os.Exit(1)
+                    }
+                }
+            }
 
-func pathExists(p string) bool {
-    _, err := os.Stat(p)
-    return err == nil
-}
+            // Remove everything in project (we'll restore .venv later)
+            entries, err := ioutil.ReadDir(*project)
+            if err != nil {
+                fmt.Fprintf(os.Stderr, "falha ao listar o diretório do projeto: %v\n", err)
+                os.Exit(1)
+            }
+            for _, e := range entries {
+                _ = os.RemoveAll(filepath.Join(*project, e.Name()))
+            }
 
-func isDir(p string) bool {
-    fi, err := os.Stat(p)
-    if err != nil {
-        return false
-    }
-    return fi.IsDir()
-}
+            // Move extracted contents into project
+            if err := moveContents(extractDir, *project); err != nil {
+                fmt.Fprintf(os.Stderr, "falha ao instalar arquivos no projeto: %v\n", err)
+                // attempt to restore venv backup
+                if venvBackupPath != "" {
+                    _ = os.Rename(venvBackupPath, venvPath)
+                }
+                os.Exit(1)
+            }
 
-// Heuristic: check whether a directory looks like the project by looking for
-// known files or folders (requirements.txt, scripts/start_server.py, dv_admin_automator)
-func hasProjectIndicators(p string) bool {
-    if !pathExists(p) || !isDir(p) {
-        return false
-    }
-    indicators := []string{
-        "requirements.txt",
-        "scripts/start_server.py",
-        "dv_admin_automator",
-    }
-    for _, ind := range indicators {
-        if pathExists(filepath.Join(p, ind)) {
-            return true
+            // Restore preserved venv
+            if venvBackupPath != "" {
+                target := filepath.Join(*project, ".venv")
+                _ = os.RemoveAll(target)
+                if err := os.Rename(venvBackupPath, target); err != nil {
+                    if err := moveContents(venvBackupPath, target); err != nil {
+                        fmt.Fprintf(os.Stderr, "aviso: falha ao restaurar venv no novo projeto: %v\n", err)
+                    }
+                    _ = os.RemoveAll(venvBackupPath)
+                }
+            }
         }
-    }
-    return false
-}
 
-func copyFile(src, dst string) error {
-    in, err := os.Open(src)
-    if err != nil {
+        // Record applied release tag (best-effort)
+        _ = ioutil.WriteFile(currentTagFile, []byte(rel.TagName), 0o644)
+        fmt.Printf("Atualização %s aplicada com sucesso.\n", rel.TagName)
+    }
         return err
     }
     defer in.Close()
@@ -196,7 +174,6 @@ func copyDir(srcDir, dstDir string) error {
     return nil
 }
 
-// moveContents moves the contents of srcDir into dstDir (creates dstDir if needed)
 func moveContents(srcDir, dstDir string) error {
     if err := os.MkdirAll(dstDir, 0o755); err != nil {
         return err
@@ -208,11 +185,9 @@ func moveContents(srcDir, dstDir string) error {
     for _, e := range entries {
         srcPath := filepath.Join(srcDir, e.Name())
         dstPath := filepath.Join(dstDir, e.Name())
-        // try rename first
         if err := os.Rename(srcPath, dstPath); err == nil {
             continue
         }
-        // fallback to copy
         if e.IsDir() {
             if err := copyDir(srcPath, dstPath); err != nil {
                 return err
@@ -226,29 +201,22 @@ func moveContents(srcDir, dstDir string) error {
     return nil
 }
 
-// getUserDocumentsDir returns the user's Documents directory.
-// On most systems this is $HOME/Documents. We keep it simple and fallback to the home dir.
+
 func getUserDocumentsDir() string {
     if h, err := os.UserHomeDir(); err == nil {
         docs := filepath.Join(h, "Documents")
         if pathExists(docs) {
             return docs
         }
-        // fallback to home
         return h
     }
-    // as a last resort, use current directory
     return "."
 }
 
-// ensureResidentLauncher makes sure a copy of the current executable exists in
-// Documents/Moodinho as "moodinho-launcher" (+ extension) and, if the running
-// executable is not the resident one, starts the resident launcher with the
-// same args and exits the current process after the resident finishes.
+
 func ensureResidentLauncher() {
     exePath, err := os.Executable()
     if err != nil {
-        // cannot determine executable; continue without resident delegation
         return
     }
     exePath, _ = filepath.Abs(exePath)
@@ -256,7 +224,6 @@ func ensureResidentLauncher() {
     docs := getUserDocumentsDir()
     moodinhoDir := filepath.Join(docs, "Moodinho")
     if err := os.MkdirAll(moodinhoDir, 0o755); err != nil {
-        // if we can't create the dir, skip resident install
         return
     }
 
@@ -264,27 +231,20 @@ func ensureResidentLauncher() {
     residentName := "moodinho-launcher" + ext
     residentPath := filepath.Join(moodinhoDir, residentName)
 
-    // If current executable is already the resident, nothing to do
     curClean, _ := filepath.Abs(exePath)
     resClean, _ := filepath.Abs(residentPath)
     if strings.EqualFold(curClean, resClean) {
         return
     }
 
-    // Copy the exe to resident location if missing or differs (we keep it simple and overwrite)
     if err := copyFile(exePath, residentPath); err != nil {
-        // failed to copy: skip delegation
         return
     }
-    // Ensure executable bit on non-Windows
     _ = os.Chmod(residentPath, 0o755)
 
-    // Start resident launcher with the same args and proxy IO; wait for it to finish
     args := os.Args[1:]
-    // Ensure the resident launcher will operate on Documents/Moodinho/project
     residentProject := filepath.Join(moodinhoDir, "project")
-    // If user did not provide a --project flag, add it so the resident will
-    // use the central Documents/Moodinho/project location by default.
+
     hasProject := false
     for _, a := range args {
         if a == "--project" || a == "-project" || strings.HasPrefix(a, "--project=") || strings.HasPrefix(a, "-project=") {
@@ -296,7 +256,6 @@ func ensureResidentLauncher() {
         args = append(args, "--project", residentProject)
     }
 
-    // Create the resident project dir if missing (empty bootstrap)
     _ = os.MkdirAll(residentProject, 0o755)
 
     cmd := exec.Command(residentPath, args...)
@@ -304,22 +263,13 @@ func ensureResidentLauncher() {
     cmd.Stderr = os.Stderr
     cmd.Stdin = os.Stdin
     if err := cmd.Run(); err != nil {
-        // If resident failed, propagate error code
         fmt.Fprintf(os.Stderr, "resident launcher failed: %v\n", err)
         os.Exit(1)
     }
-    // On success, exit current process. The resident launcher performed the work.
     os.Exit(0)
 }
 
-// findPython3Command probes common python commands and returns one that
-// executes and reports major version 3. It checks (in order):
-// - on Windows: "py -3", "python", "python3"
-// - on other OS: "python3", "python"
-// findPython3Command probes common python commands and returns a command slice
-// suitable for exec.Command (program and args). Example returns: {"py","-3"} or {"python3"}.
 func findPython3Command() ([]string, error) {
-    // helper to test a command and args
     test := func(cand []string) bool {
         prog := cand[0]
         args := append(cand[1:], "-c", "import sys;print(sys.version_info[0])")
@@ -354,17 +304,17 @@ func main() {
     auto := flag.Bool("auto", false, "Apply update automatically (no prompt)")
     flag.Parse()
 
-    // Ensure there's a resident launcher in Documents\Moodinho and delegate to it
+    fmt.Println("Olá, sou o Moodinho, deixa eu só verificar se tenho alguma atualização para você...")
+
     ensureResidentLauncher()
 
-    // If project was not provided (default "."), use the resident Documents/Moodinho/project
     if *project == "." || strings.TrimSpace(*project) == "" {
         docs := getUserDocumentsDir()
         *project = filepath.Join(docs, "Moodinho", "project")
     }
 
     apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", *owner, *repo)
-    fmt.Printf("Launcher: checking releases for %s/%s...\n", *owner, *repo)
+    fmt.Printf("Verificando atualizações para %s/%s...\n", *owner, *repo)
     body, err := httpGet(apiURL)
     if err != nil {
         fmt.Fprintf(os.Stderr, "failed to fetch release info: %v\n", err)
@@ -375,7 +325,7 @@ func main() {
         fmt.Fprintf(os.Stderr, "failed to parse release JSON: %v\n", err)
         os.Exit(1)
     }
-    fmt.Printf("Found release: %s\n", rel.TagName)
+    fmt.Printf("Encontrada release: %s\n", rel.TagName)
 
     asset := findAsset(rel.Assets, *assetPrefix)
     if asset == nil {
@@ -391,13 +341,12 @@ func main() {
     defer os.RemoveAll(tmpDir)
 
     zipPath := filepath.Join(tmpDir, asset.Name)
-    fmt.Printf("Downloading %s to %s...\n", asset.BrowserDownloadURL, zipPath)
+    fmt.Printf("Baixando %s para %s...\n", asset.BrowserDownloadURL, zipPath)
     if err := downloadFile(zipPath, asset.BrowserDownloadURL); err != nil {
         fmt.Fprintf(os.Stderr, "download failed: %v\n", err)
         os.Exit(1)
     }
 
-    // Try to find a checksum asset with same name + .sha256
     checksumAssetName := asset.Name + ".sha256"
     var checksumURL string
     for _, a := range rel.Assets {
@@ -407,85 +356,103 @@ func main() {
         }
     }
     if checksumURL != "" {
-        fmt.Printf("Found checksum asset (%s), downloading...\n", checksumAssetName)
+        fmt.Printf("Encontrado asset de checksum (%s), baixando...\n", checksumAssetName)
         csb, err := httpGet(checksumURL)
         if err != nil {
-            fmt.Fprintf(os.Stderr, "failed to download checksum: %v\n", err)
+            fmt.Fprintf(os.Stderr, "falha ao baixar checksum: %v\n", err)
             os.Exit(1)
         }
         expected := strings.Fields(string(csb))[0]
-        fmt.Printf("Verifying sha256...\n")
+        fmt.Printf("Verificando sha256...\n")
         if err := verifySha256(zipPath, expected); err != nil {
-            fmt.Fprintf(os.Stderr, "checksum verification failed: %v\n", err)
+            fmt.Fprintf(os.Stderr, "verificação do checksum falhou: %v\n", err)
             os.Exit(1)
         }
         fmt.Printf("Checksum OK\n")
     } else {
-        fmt.Printf("No checksum asset found; skipping verification\n")
+        fmt.Printf("Nenhum asset de checksum encontrado; pulando verificação\n")
     }
 
-    // Extract to temp folder and atomically replace
     extractDir := filepath.Join(tmpDir, "extract")
     if err := unzip(zipPath, extractDir); err != nil {
-        fmt.Fprintf(os.Stderr, "failed to extract zip: %v\n", err)
+        fmt.Fprintf(os.Stderr, "falha ao extrair o pacote: %v\n", err)
         os.Exit(1)
     }
 
-    backupDir := *project + "-bak-" + strings.ReplaceAll(rel.TagName, "/", "-")
-    fmt.Printf("Prepared extracted files in %s\n", extractDir)
+    fmt.Printf("Arquivos preparados em %s\n", extractDir)
 
-    if !*auto {
-        fmt.Printf("About to replace project at '%s' with release %s. Backup will be created at '%s'. Continue? (y/N): ", *project, rel.TagName, backupDir)
-        var resp string
-        fmt.Scanln(&resp)
-        if strings.ToLower(strings.TrimSpace(resp)) != "y" {
-            fmt.Println("Aborted by user")
-            os.Exit(0)
+    currentTagFile := filepath.Join(*project, ".moodinho_release")
+    currentTag := ""
+    if pathExists(currentTagFile) {
+        if b, err := ioutil.ReadFile(currentTagFile); err == nil {
+            currentTag = strings.TrimSpace(string(b))
         }
     }
 
-    // Decide how to install the extracted files.
-    // If the project path doesn't exist, rename extract -> project path.
-    // If the project path exists and looks like a full project (indicators),
-    // create a backup and replace it. If the project path exists but does NOT
-    // look like a project (e.g. only has the launcher binary), move the
-    // extracted contents into the existing directory so the launcher can
-    // bootstrap itself in an empty folder.
-    if !pathExists(*project) {
-        if err := os.Rename(extractDir, *project); err != nil {
-            fmt.Fprintf(os.Stderr, "failed to move new project into place: %v\n", err)
-            os.Exit(1)
-        }
+    if currentTag == rel.TagName {
+        fmt.Printf("Nenhuma atualização encontrada (tag %s). Iniciando o projeto...\n", rel.TagName)
     } else {
-        // project path exists
-        if hasProjectIndicators(*project) {
-            fmt.Printf("Creating backup: %s\n", backupDir)
-            if err := os.RemoveAll(backupDir); err != nil {
-                fmt.Fprintf(os.Stderr, "failed removing old backup: %v\n", err)
-                os.Exit(1)
-            }
-            if err := os.Rename(*project, backupDir); err != nil {
-                fmt.Fprintf(os.Stderr, "failed to create backup: %v\n", err)
-                os.Exit(1)
-            }
+        fmt.Printf("Atualização disponível: %s -> aplicando agora...\n", rel.TagName)
+
+        if !pathExists(*project) {
             if err := os.Rename(extractDir, *project); err != nil {
-                fmt.Fprintf(os.Stderr, "failed to move new project into place: %v\n", err)
-                // Attempt rollback
-                fmt.Fprintf(os.Stderr, "attempting rollback...\n")
-                _ = os.Rename(backupDir, *project)
+                fmt.Fprintf(os.Stderr, "falha ao mover o novo projeto para o local: %v\n", err)
                 os.Exit(1)
             }
         } else {
-            // existing folder but no project indicators: merge contents
-            if err := moveContents(extractDir, *project); err != nil {
-                fmt.Fprintf(os.Stderr, "failed to install files into existing directory: %v\n", err)
+            venvPath := filepath.Join(*project, ".venv")
+            var venvBackupPath string
+            if pathExists(venvPath) {
+                venvBackupPath = filepath.Join(tmpDir, "venv-backup")
+                _ = os.RemoveAll(venvBackupPath)
+                if err := os.Rename(venvPath, venvBackupPath); err != nil {
+                    if err := moveContents(venvPath, venvBackupPath); err != nil {
+                        fmt.Fprintf(os.Stderr, "falha ao preservar o venv existente: %v\n", err)
+                        os.Exit(1)
+                    }
+                }
+            }
+
+            entries, err := ioutil.ReadDir(*project)
+            if err != nil {
+                fmt.Fprintf(os.Stderr, "falha ao listar diretório do projeto: %v\n", err)
                 os.Exit(1)
             }
+            for _, e := range entries {
+                name := e.Name()
+                if name == ".venv" {
+                    continue
+                }
+                _ = os.RemoveAll(filepath.Join(*project, name))
+            }
+
+            if err := moveContents(extractDir, *project); err != nil {
+                fmt.Fprintf(os.Stderr, "falha ao instalar arquivos no projeto: %v\n", err)
+                if venvBackupPath != "" {
+                    _ = os.Rename(venvBackupPath, venvPath)
+                }
+                os.Exit(1)
+            }
+
+            if venvBackupPath != "" {
+                target := filepath.Join(*project, ".venv")
+                _ = os.RemoveAll(target)
+                if err := os.Rename(venvBackupPath, target); err != nil {
+                    if err := moveContents(venvBackupPath, target); err != nil {
+                        fmt.Fprintf(os.Stderr, "aviso: falha ao restaurar venv no novo projeto: %v\n", err)
+                    }
+                    _ = os.RemoveAll(venvBackupPath)
+                }
+            }
         }
+
+
+        _ = ioutil.WriteFile(currentTagFile, []byte(rel.TagName), 0o644)
+        fmt.Printf("Atualização %s aplicada com sucesso.\n", rel.TagName)
     }
 
-    fmt.Printf("Update applied. Starting project using scripts/start_server.py\n")
-    // Prefer to use the project's venv python if present (project/.venv)
+    fmt.Printf("Atualização aplicada. Iniciando o projeto usando scripts/start_server.py\n")
+
     var pythonCmd []string
     venvPy := filepath.Join(*project, ".venv")
     if os.PathSeparator == '\\' {
@@ -498,21 +465,36 @@ func main() {
     } else {
         pc, err := findPython3Command()
         if err != nil {
-            fmt.Fprintf(os.Stderr, "no suitable Python 3 interpreter found: %v\n", err)
+            fmt.Fprintf(os.Stderr, "nenhum interpretador Python 3 encontrado no PATH: %v\n", err)
             os.Exit(1)
         }
         pythonCmd = pc
     }
 
-    // Build exec.Command safely with program and args
+
+    if !pathExists(venvPy) {
+        fmt.Printf("Preparando ambiente (criando venv em %s) ...\n", filepath.Dir(venvPy))
+        createArgs := append(pythonCmd[1:], "-m", "venv", filepath.Join(*project, ".venv"))
+        createCmd := exec.Command(pythonCmd[0], createArgs...)
+        createCmd.Stdout = os.Stdout
+        createCmd.Stderr = os.Stderr
+        if err := createCmd.Run(); err != nil {
+            fmt.Fprintf(os.Stderr, "falha ao criar venv em %s: %v\n", *project, err)
+        } else {
+            if pathExists(venvPy) {
+                pythonCmd = []string{venvPy}
+            }
+        }
+    }
+
+
     cmd := exec.Command(pythonCmd[0], append(pythonCmd[1:], "scripts/start_server.py")...)
-    // Ensure the start script runs with the project folder as working directory
     cmd.Dir = *project
     cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
     cmd.Stdin = os.Stdin
     if err := cmd.Run(); err != nil {
-        fmt.Fprintf(os.Stderr, "failed to start project: %v\n", err)
+        fmt.Fprintf(os.Stderr, "falha ao iniciar o projeto: %v\n", err)
         os.Exit(1)
     }
 }
